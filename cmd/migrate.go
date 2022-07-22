@@ -14,14 +14,17 @@ const (
 )
 
 type migrateCmd struct {
-	driver         string
-	dataSourceName string
+	driver string
 }
 
-func (m *migrateCmd) RunE(_ *cobra.Command, args []string) error {
-	viper.GetInt("postgres_max_open_conns")
-	viper.GetDuration("postgres_conn_max_lifetime")
-	database, err := db.NewPostgres(m.dataSourceName)
+func (m *migrateCmd) RunE(cmd *cobra.Command, args []string) error {
+	dataSourceName := viper.GetString("dsn")
+	if dataSourceName == "" {
+		return errors.New("dsn should not be empty")
+	}
+
+	cmd.SilenceUsage = true
+	database, err := db.NewPostgres(dataSourceName, db.DefaultPostgresOptions())
 	if err != nil {
 		return err
 	}
@@ -35,27 +38,34 @@ func (m *migrateCmd) RunE(_ *cobra.Command, args []string) error {
 	op := args[0]
 	switch op {
 	case migrateUp:
-		return migration.Up()
+		err = migration.Up()
 	case migrateDown:
-		return migration.Down()
+		err = migration.Down()
 	case migrateDrop:
-		return migration.Drop()
+		err = migration.Drop()
 	default:
 		return errors.New("invalid op")
 	}
+
+	if err != nil {
+		return err
+	}
+
+	cmd.Println("OK")
+	return nil
 }
 
 func init() {
 	cmd := migrateCmd{driver: "pgx"}
 	realCmd := &cobra.Command{
-		Use:     "migrate",
+		Use:     "migrate up|down|drop",
 		Short:   "migrate database",
-		Example: "migrate up|down|drop",
+		Example: "migrate up",
 		Args:    cobra.ExactArgs(1),
 		RunE:    cmd.RunE,
 	}
 
-	realCmd.Flags().StringVar(&cmd.dataSourceName, "dsn", "", "data source name, like postgres://localhost:5432/db?sslmode=disable")
-	_ = realCmd.MarkFlagRequired("dsn")
+	realCmd.Flags().StringP("dsn", "", "", "data source name, like postgres://localhost:5432/db?sslmode=disable")
+	_ = viper.BindPFlag("dsn", realCmd.Flags().Lookup("dsn"))
 	rootCmd.AddCommand(realCmd)
 }
