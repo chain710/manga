@@ -14,7 +14,6 @@ const (
 )
 
 type migrateCmd struct {
-	driver string
 }
 
 func (m *migrateCmd) RunE(cmd *cobra.Command, args []string) error {
@@ -56,7 +55,7 @@ func (m *migrateCmd) RunE(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	cmd := migrateCmd{driver: "pgx"}
+	cmd := migrateCmd{}
 	realCmd := &cobra.Command{
 		Use:     "migrate up|down|drop",
 		Short:   "migrate database",

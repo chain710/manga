@@ -30,9 +30,19 @@ func WithLogLevel(l zapcore.Level) Option {
 	}
 }
 
+func WithLogEncoding(name string) Option {
+	return func(c *logConfig) {
+		c.config.Encoding = name
+	}
+}
+
 func Init(opts ...Option) {
+	zapConfig := zap.NewProductionConfig()
+	zapConfig.Encoding = "console"
+	zapConfig.EncoderConfig.StacktraceKey = ""
+	zapConfig.EncoderConfig.EncodeTime = zapcore.RFC3339TimeEncoder
 	c := logConfig{
-		config:  zap.NewProductionConfig(),
+		config:  zapConfig,
 		options: []zap.Option{},
 	}
 	for _, opt := range opts {
@@ -52,6 +62,7 @@ func init() {
 
 func initLogger(l *zap.Logger) {
 	slogger = l.Sugar()
+	With = slogger.With
 	Debugf = slogger.Debugf
 	Infof = slogger.Infof
 	Warnf = slogger.Warnf
@@ -63,4 +74,8 @@ func initLogger(l *zap.Logger) {
 	Warnw = slogger.Warnw
 	Errorw = slogger.Errorw
 	Panicw = slogger.Panicw
+}
+
+func Logger() *zap.Logger {
+	return slogger.Desugar()
 }

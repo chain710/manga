@@ -14,6 +14,7 @@ all: mod build
 
 mod:
 	go mod download all
-
 build:
 	go build -o bin/manga -ldflags $(LDFLAGS) $(REPO)
+winbuild:
+	go build -o bin/manga.exe $(REPO)
