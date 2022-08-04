@@ -83,7 +83,7 @@ func (*noCopy) Unlock() {}
 type proxyArchive struct {
 	noCopy
 	Archive
-	closed bool
+	closed bool // no thread safe, should not use in race condition
 	ref    *atomic.Int32
 }
 
@@ -108,7 +108,9 @@ func (c *proxyArchive) Close() error {
 	if count := c.ref.Sub(1); count == 0 {
 		log.Debugf("close archive %s", c.Archive.Path())
 		c.closed = true
-		return c.Archive.Close()
+		err := c.Archive.Close()
+		c.Archive = nil
+		return err
 	} else if count > 0 {
 		c.closed = true
 		return nil

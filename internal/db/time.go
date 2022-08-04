@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql/driver"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -14,6 +15,12 @@ func NewTime(t time.Time) Time {
 // Time store time in seconds
 type Time struct {
 	t time.Time
+}
+
+func (t Time) MarshalJSON() ([]byte, error) {
+	s := t.t.Format(time.RFC3339)
+	s = fmt.Sprintf("\"%s\"", s)
+	return []byte(s), nil
 }
 
 var _ driver.Valuer = Time{}
@@ -39,4 +46,8 @@ func (t *Time) EqualTime(other time.Time) bool {
 
 func (t *Time) IsZero() bool {
 	return t.t.IsZero()
+}
+
+func (t *Time) Time() time.Time {
+	return t.t
 }

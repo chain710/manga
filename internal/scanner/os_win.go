@@ -1,6 +1,6 @@
 //go:build windows
 
-package parser
+package scanner
 
 import (
 	"path/filepath"

@@ -1,4 +1,4 @@
-package parser
+package scanner
 
 import (
 	"github.com/chain710/manga/internal/arc"
@@ -29,7 +29,7 @@ func less(x, y []int, xs, ys string) bool {
 
 type digitsExtractor func(int) ([]int, string)
 
-func extractVolumeMetaDigits(vols []VolumeMeta) digitsExtractor {
+func extractVolumeMetaDigits(vols []volumeMeta) digitsExtractor {
 	cache := make(map[string][]int)
 	r := regexp.MustCompile(`\d+`)
 	return func(i int) ([]int, string) {

@@ -1,7 +1,0 @@
-BEGIN;
-
-DROP TABLE IF EXISTS library;
-DROP TABLE IF EXISTS books;
-DROP TABLE IF EXISTS volumes;
-DROP TABLE IF EXISTS volume_progress;
-END;

@@ -2,6 +2,7 @@ BEGIN;
 CREATE TABLE IF NOT EXISTS "libraries" (
   "id" SERIAL,
   "create_at" TIMESTAMP WITH TIME ZONE NOT NULL,
+  "scan_at" TIMESTAMP WITH TIME ZONE NOT NULL,
   "name" VARCHAR(250) NOT NULL,
   "path" VARCHAR(250) NOT NULL,
   PRIMARY KEY ("id"),
@@ -35,8 +36,8 @@ CREATE TABLE IF NOT EXISTS "volumes" (
   "create_at" TIMESTAMP WITH TIME ZONE NOT NULL,
   "path" VARCHAR(250) NOT NULL,
   "title" VARCHAR(250) NOT NULL, /* title of this volume */
-  "cover" VARCHAR(250) NOT NULL, /* cover of this volume */
   "volume" int NOT NULL, /* number of volume, for sort; extra volume always equal 0 */
+  "page_count" int NOT NULL, /* how many pages(files) */
   "files" TEXT NOT NULL, /* files in archive, should be sorted */
   PRIMARY KEY ("id"),
   CONSTRAINT book_volumes_bid_vol_unique UNIQUE ("book_id", "volume"),
@@ -55,7 +56,18 @@ CREATE TABLE IF NOT EXISTS "volume_progress" (
     PRIMARY KEY ("volume_id") /* user id */
 );
 
-CREATE INDEX IF NOT EXISTS "volume_reading_bid_index" ON "volume_progress" ("book_id");
-CREATE INDEX IF NOT EXISTS "volume_reading_vid_index" ON "volume_progress" ("volume_id");
+CREATE INDEX IF NOT EXISTS "volume_progress_bid_index" ON "volume_progress" ("book_id");
+
+CREATE TABLE IF NOT EXISTS "volume_thumbnail" (
+    "id" INT NOT NULL REFERENCES "volumes" ("id") ON DELETE CASCADE,
+    "thumbnail" BYTEA NOT NULL,
+    PRIMARY KEY ("id")
+);
+
+CREATE TABLE IF NOT EXISTS "book_thumbnail" (
+    "id" INT NOT NULL REFERENCES "books" ("id") ON DELETE CASCADE,
+     "thumbnail" BYTEA NOT NULL,
+     PRIMARY KEY ("id")
+);
 
 COMMIT;

@@ -6,6 +6,7 @@ import (
 	"github.com/chain710/manga/internal/cache"
 	"github.com/chain710/manga/internal/db"
 	"github.com/chain710/manga/internal/log"
+	"github.com/chain710/manga/internal/tasks"
 	gingzip "github.com/gin-contrib/gzip"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
@@ -31,11 +32,22 @@ func Start(ctx context.Context, cfg Config) {
 		gingzip.Gzip(gingzip.DefaultCompression))
 	archiveCache := arc.NewArchiveCache(cfg.ArchiveCacheSize)
 	volumesCache := cache.NewVolumes(cfg.VolumeCacheSize)
+	imagesCache := cache.NewImages(cfg.ImageCacheSize)
+	var imagePrefetch *tasks.ImagePrefetch
+	if cfg.PrefetchImages > 0 {
+		log.Debugf("enable image prefetch, count=%d queue=%d",
+			cfg.PrefetchImages, cfg.PrefetchQueue)
+		imagePrefetch = tasks.NewImagePrefetch(imagesCache, archiveCache, cfg.PrefetchQueue)
+		go imagePrefetch.Start(ctx)
+	}
+
 	h := handlers{
-		config:       cfg,
-		database:     database,
-		archiveCache: archiveCache,
-		volumesCache: volumesCache,
+		config:        cfg,
+		database:      database,
+		archiveCache:  archiveCache,
+		volumesCache:  volumesCache,
+		imagesCache:   imagesCache,
+		imagePrefetch: imagePrefetch,
 	}
 	h.registerRoutes(router)
 

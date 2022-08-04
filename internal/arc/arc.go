@@ -48,6 +48,7 @@ func Open(path string, option ...OpenOption) (Archive, error) {
 		return nil, err
 	}
 
+	log.Debugf("open archive: %s", path)
 	var files []File
 	if !opt.SkipReadingFiles {
 		for {

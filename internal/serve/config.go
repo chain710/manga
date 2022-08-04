@@ -12,6 +12,9 @@ type Config struct {
 	DSN              string
 	ArchiveCacheSize int
 	VolumeCacheSize  int
+	ImageCacheSize   int
+	PrefetchImages   int
+	PrefetchQueue    int
 }
 
 func (c *Config) Validate() error {
@@ -27,6 +30,12 @@ func (c *Config) Validate() error {
 	}
 	if c.VolumeCacheSize <= 0 {
 		return errors.New("invalid volume cache size")
+	}
+	if c.ImageCacheSize <= 0 {
+		return errors.New("invalid image cache size")
+	}
+	if c.PrefetchImages > 0 && c.PrefetchQueue <= 0 {
+		return errors.New("invalid prefetch queue")
 	}
 	return nil
 }

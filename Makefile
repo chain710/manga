@@ -20,3 +20,5 @@ vet:
 	go vet ./...
 winbuild: vet
 	go build -o bin/manga.exe $(REPO)
+genmock:
+	mockery --name=Interface --dir internal/db --output internal/db/mocks

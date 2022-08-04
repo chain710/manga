@@ -10,23 +10,16 @@ import (
 type Library struct {
 	ID       int64  `db:"id" json:"id"`
 	CreateAt Time   `db:"create_at" json:"create_at"`
+	ScanAt   Time   `db:"scan_at" json:"scan_at"`
 	Name     string `db:"name" json:"name"`
 	Path     string `db:"path" json:"path"`
 }
 
 type Book struct {
-	ID        int64  `db:"id"`
-	LibraryID int64  `db:"library_id"`
-	CreateAt  Time   `db:"create_at"`
-	UpdateAt  Time   `db:"update_at"`
-	PathModAt Time   `db:"path_mod_at"`
-	Path      string `db:"path"`
-	Name      string `db:"name"`
-	Writer    string `db:"writer"`
-	Volume    int    `db:"volume"`
-	Summary   string `db:"summary"`
-	Volumes   []Volume
-	Extras    []Volume
+	BookTable
+	Volumes  []Volume      `json:"volumes,omitempty"`
+	Extras   []Volume      `json:"extras,omitempty"`
+	Progress *BookProgress `json:"progress,omitempty"`
 }
 
 func (b *Book) GetVolume(id int64) (*Volume, error) {
@@ -62,14 +55,16 @@ func (b *Book) SyncBookID() {
 }
 
 type Volume struct {
-	ID       int64          `db:"id"`
-	BookID   int64          `db:"book_id"`
-	CreateAt Time           `db:"create_at"`
-	Path     string         `db:"path"`
-	Title    string         `db:"title"`
-	Cover    string         `db:"cover"`
-	Volume   int            `db:"volume"` // 0 = extra
-	Files    VolumeFileList `db:"files"`
+	ID        int64          `db:"id" json:"id"`
+	BookID    int64          `db:"book_id" json:"book_id"`
+	BookName  string         `db:"book_name" json:"book_name,omitempty"`
+	Writer    string         `db:"writer" json:"writer,omitempty"`
+	CreateAt  Time           `db:"create_at" json:"create_at"`
+	Path      string         `db:"path" json:"path"`
+	Title     string         `db:"title" json:"title"`
+	Volume    int            `db:"volume" json:"volume"` // 0 = extra
+	PageCount int            `db:"page_count" json:"page_count"`
+	Files     VolumeFileList `db:"files" json:"files"`
 }
 
 func (v *Volume) DeepCopy() *Volume {
@@ -88,12 +83,10 @@ type VolumeFileList []VolumeFile
 
 var _ driver.Valuer = VolumeFileList{}
 
-//goland:noinspection GoMixedReceiverTypes
 func (v VolumeFileList) Value() (driver.Value, error) {
 	return json.Marshal(v)
 }
 
-//goland:noinspection GoMixedReceiverTypes
 func (v *VolumeFileList) Scan(src interface{}) error {
 	switch val := src.(type) {
 	case string:
@@ -121,4 +114,26 @@ type VolumeProgress struct {
 	VolumeID int64 `db:"volume_id"`
 	Complete bool  `db:"complete"`
 	Page     int   `db:"page"`
+}
+
+type BookProgress struct {
+	BookID   int64 `db:"book_id" json:"book_id"`
+	UpdateAt Time  `db:"update_at" json:"update_at"`
+	// Volume now reading volume
+	Volume int `db:"volume" json:"volume"`
+	// VolumeID now reading volume id
+	VolumeID  int64  `db:"volume_id" json:"volume_id"`
+	Title     string `db:"title" json:"title"`
+	Page      int    `db:"page" json:"page"`
+	PageCount int    `db:"page_count" json:"page_count"`
+}
+
+type VolumeThumbnail struct {
+	ID        int64  `db:"id"`
+	Thumbnail []byte `db:"thumbnail"`
+}
+
+type BookThumbnail struct {
+	ID        int64  `db:"id"`
+	Thumbnail []byte `db:"thumbnail"`
 }
