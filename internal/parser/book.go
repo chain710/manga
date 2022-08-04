@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"github.com/chain710/manga/internal/arc"
 	"github.com/chain710/manga/internal/log"
-	internalstrings "github.com/chain710/manga/internal/strings"
+	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
+	"time"
 )
 
 //goland:noinspection RegExpRedundantEscape
@@ -55,74 +55,61 @@ func ParseBookName(name string) (*BookNameMeta, error) {
 	return &meta, nil
 }
 
-type VolumeOptions struct {
-	AcceptFileTypes internalstrings.Set
-	SortFiles       func([]arc.File)
+type VolumeBasicMeta struct {
+	Name    string // name or last digit
+	ID      int    // Id as integer
+	Path    string
+	Size    int64
+	ModTime time.Time
 }
 
-type VolumeOption func(*VolumeOptions)
-
-func VolumeOptionsDefault(opt *VolumeOptions) {
-	opt.AcceptFileTypes = internalstrings.NewSet(".jpg", ".bmp", ".png")
-	opt.SortFiles = SortByName
+type VolumeMeta struct {
+	VolumeBasicMeta
+	Files []arc.File // files in archive
 }
 
-type BookVolumeBasicMeta struct {
-	Name string // name or last digit
-	ID   int    // Id as integer
-	Path string
-}
-
-type BookVolumeMeta struct {
-	BookVolumeBasicMeta
-	Files []arc.File
-}
-
-func ParseBookVolumeBasic(volumePath string) BookVolumeBasicMeta {
-	volName := filepath.Base(volumePath)
-	digit := regexp.MustCompile(`\d+`)
-	id := stripExt(volName)
-	digits := digit.FindAllString(id, -1)
-	var idInt int
-	if len(digits) != 0 {
-		id = digits[len(digits)-1]
-		// ignore this error
-		idInt, _ = strconv.Atoi(id)
+func ParseBookVolumeBasic(volumePath string) (VolumeBasicMeta, error) {
+	//goland:noinspection RegExpRedundantEscape
+	r := regexp.MustCompile(`[^\s\]\[_\-\.]+`)
+	info, err := os.Lstat(volumePath)
+	if err != nil {
+		return VolumeBasicMeta{}, err
 	}
-
-	return BookVolumeBasicMeta{Name: id, ID: idInt, Path: volumePath}
+	volName := stripExt(filepath.Base(volumePath))
+	parts := r.FindAllString(volName, -1)
+	return VolumeBasicMeta{Name: strings.Join(parts, " "), Path: volumePath, Size: info.Size(), ModTime: info.ModTime()}, nil
 }
 
 // ParseBookVolume parse single volume(archive file)
-func ParseBookVolume(volumePath string, options ...VolumeOption) (*BookVolumeMeta, error) {
+func ParseBookVolume(volumePath string, options *Options) (*VolumeMeta, error) {
 	logger := log.With("vol", volumePath)
-	var opt VolumeOptions
-	for _, apply := range options {
-		apply(&opt)
+	basic, err := ParseBookVolumeBasic(volumePath)
+	if err != nil {
+		logger.Errorf("parse vol basic meta error: %s", err)
+		return nil, err
 	}
-
-	basic := ParseBookVolumeBasic(volumePath)
 	archive, err := arc.Open(volumePath)
 	if err != nil {
 		logger.Errorf("open volume error %s", err)
 		return nil, err
 	}
 
+	//goland:noinspection GoUnhandledErrorResult
+	defer archive.Close()
 	files := archive.GetFiles()
 	filesInVol := make([]arc.File, 0, len(files))
 	for _, file := range files {
-		ext := filepath.Ext(file.Name())
-		if opt.AcceptFileTypes.Len() == 0 || opt.AcceptFileTypes.Contains(ext) {
+		if options.isArcFileAllowed(file.Name()) {
 			filesInVol = append(filesInVol, file)
 		}
 	}
 
-	if opt.SortFiles != nil {
-		opt.SortFiles(filesInVol)
+	if options.SortArchiveFiles != nil {
+		options.SortArchiveFiles(filesInVol)
 	}
-	return &BookVolumeMeta{
-		BookVolumeBasicMeta: basic,
-		Files:               filesInVol,
+	return &VolumeMeta{
+		VolumeBasicMeta: basic,
+		Files:           filesInVol,
 	}, nil
 }
 

@@ -6,10 +6,12 @@ import (
 )
 
 type Config struct {
-	Addr    string
-	Debug   bool
-	BaseURI string
-	DSN     string
+	Addr             string
+	Debug            bool
+	BaseURI          string
+	DSN              string
+	ArchiveCacheSize int
+	VolumeCacheSize  int
 }
 
 func (c *Config) Validate() error {
@@ -19,6 +21,12 @@ func (c *Config) Validate() error {
 
 	if c.DSN == "" {
 		return errors.New("dsn required")
+	}
+	if c.ArchiveCacheSize <= 0 {
+		return errors.New("invalid archive cache size")
+	}
+	if c.VolumeCacheSize <= 0 {
+		return errors.New("invalid volume cache size")
 	}
 	return nil
 }

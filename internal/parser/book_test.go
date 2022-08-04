@@ -2,6 +2,7 @@ package parser
 
 import (
 	"github.com/stretchr/testify/require"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -44,33 +45,29 @@ func TestParseBookName(t *testing.T) {
 }
 
 func TestParseBookVolumeBasic(t *testing.T) {
+	file1 := filepath.Join("testdata2", "book - vol_2.zip")
+	file1Info, err := os.Lstat(file1)
+	require.NoError(t, err)
 	tests := []struct {
 		name   string
 		path   string
-		expect BookVolumeBasicMeta
+		expect VolumeBasicMeta
 	}{
 		{
 			name: "normal",
-			path: filepath.Join("dir", "my vol 01.zip03"),
-			expect: BookVolumeBasicMeta{
-				Name: "01",
-				ID:   1,
-				Path: filepath.Join("dir", "my vol 01.zip03"),
-			},
-		},
-		{
-			name: "without digit part",
-			path: filepath.Join("dir", "mybook.zip"),
-			expect: BookVolumeBasicMeta{
-				Name: "mybook",
-				ID:   0,
-				Path: filepath.Join("dir", "mybook.zip"),
+			path: file1,
+			expect: VolumeBasicMeta{
+				Name:    "book vol 2",
+				Path:    file1,
+				Size:    file1Info.Size(),
+				ModTime: file1Info.ModTime(),
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := ParseBookVolumeBasic(tt.path)
+			actual, err := ParseBookVolumeBasic(tt.path)
+			require.NoError(t, err)
 			require.Equal(t, actual, tt.expect)
 		})
 	}

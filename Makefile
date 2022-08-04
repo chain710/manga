@@ -10,11 +10,13 @@ endif
 
 LDFLAGS = "-X '$(REPO)/internal/version.GitCommit=$(GIT_COMMIT)-$(GIT_STATUS)' -X '$(REPO)/internal/version.BuildDate=$(BUILD_DATE)'"
 
-all: mod build
+all: mod vet build
 
 mod:
 	go mod download all
 build:
 	go build -o bin/manga -ldflags $(LDFLAGS) $(REPO)
-winbuild:
+vet:
+	go vet ./...
+winbuild: vet
 	go build -o bin/manga.exe $(REPO)

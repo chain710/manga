@@ -3,18 +3,21 @@ module github.com/chain710/manga
 go 1.17
 
 require (
-	github.com/chain710/workqueue v0.0.0-20220727074634-1032f50e208d
+	github.com/chain710/workqueue v0.1.0
 	github.com/gen2brain/go-unarr v0.1.4
 	github.com/gin-contrib/gzip v0.0.6
 	github.com/gin-contrib/zap v0.0.2
 	github.com/gin-gonic/gin v1.8.1
 	github.com/golang-migrate/migrate/v4 v4.15.2
+	github.com/hashicorp/golang-lru v0.5.4
 	github.com/jackc/pgx/v4 v4.10.1
 	github.com/jmoiron/sqlx v1.3.5
+	github.com/jxskiss/base62 v1.1.0
 	github.com/spf13/cobra v1.5.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.12.0
 	github.com/stretchr/testify v1.8.0
+	go.uber.org/atomic v1.7.0
 	go.uber.org/zap v1.21.0
 )
 
@@ -61,7 +64,6 @@ require (
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/subosito/gotenv v1.3.0 // indirect
 	github.com/ugorji/go/codec v1.2.7 // indirect
-	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4 // indirect
 	golang.org/x/net v0.0.0-20220520000938-2e3eb7b945c2 // indirect

@@ -3,10 +3,16 @@
 package parser
 
 import (
+	"path/filepath"
 	"syscall"
 )
 
 func isHiddenFile(filename string) (bool, error) {
+	base := filepath.Base(filename)
+	if base[0:1] == "." {
+		return true, nil
+	}
+
 	pointer, err := syscall.UTF16PtrFromString(filename)
 	if err != nil {
 		return false, err

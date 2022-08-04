@@ -2,6 +2,8 @@ package serve
 
 import (
 	"context"
+	"github.com/chain710/manga/internal/arc"
+	"github.com/chain710/manga/internal/cache"
 	"github.com/chain710/manga/internal/db"
 	"github.com/chain710/manga/internal/log"
 	gingzip "github.com/gin-contrib/gzip"
@@ -27,10 +29,15 @@ func Start(ctx context.Context, cfg Config) {
 	router.Use(
 		ginzap.Ginzap(log.Logger(), time.RFC3339, false),
 		gingzip.Gzip(gingzip.DefaultCompression))
-	handlers{
-		config:   cfg,
-		database: database,
-	}.registerRoutes(router)
+	archiveCache := arc.NewArchiveCache(cfg.ArchiveCacheSize)
+	volumesCache := cache.NewVolumes(cfg.VolumeCacheSize)
+	h := handlers{
+		config:       cfg,
+		database:     database,
+		archiveCache: archiveCache,
+		volumesCache: volumesCache,
+	}
+	h.registerRoutes(router)
 
 	server := &http.Server{
 		Addr:    cfg.Addr,

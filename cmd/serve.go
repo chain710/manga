@@ -17,10 +17,12 @@ type serveCmd struct {
 
 func (m *serveCmd) RunE(cmd *cobra.Command, _ []string) error {
 	config := serve.Config{
-		Addr:    viper.GetString("addr"),
-		Debug:   m.debug,
-		BaseURI: m.baseURI,
-		DSN:     viper.GetString("dsn"),
+		Addr:             viper.GetString("addr"),
+		Debug:            m.debug,
+		BaseURI:          m.baseURI,
+		DSN:              viper.GetString("dsn"),
+		ArchiveCacheSize: viper.GetInt("archive_cache"),
+		VolumeCacheSize:  viper.GetInt("volume_cache"),
 	}
 
 	if err := config.Validate(); err != nil {
@@ -56,8 +58,9 @@ func init() {
 	_ = viper.BindPFlag("addr", realCmd.Flags().Lookup("addr"))
 	realCmd.Flags().StringP("dsn", "", "", "data source name, like postgres://localhost:5432/db?sslmode=disable")
 	_ = viper.BindPFlag("dsn", realCmd.Flags().Lookup("dsn"))
-	realCmd.Flags().BoolVarP(&cmd.debug, "debug", "D", true, "debug mode")
+	realCmd.Flags().BoolVarP(&cmd.debug, "debug", "D", false, "debug mode")
 	realCmd.Flags().StringVarP(&cmd.baseURI, "base_uri", "", "", "http base uri")
-
+	_ = viperFlag(realCmd.Flags(), "archive_cache", 100, "archive cache size")
+	_ = viperFlag(realCmd.Flags(), "volume_cache", 100, "volume cache size")
 	rootCmd.AddCommand(realCmd)
 }

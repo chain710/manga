@@ -3,67 +3,34 @@ package parser
 import (
 	"errors"
 	"github.com/chain710/manga/internal/log"
-	internalstrings "github.com/chain710/manga/internal/strings"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 type BookMeta struct {
 	Name    BookNameMeta
-	Volumes []BookVolumeBasicMeta
+	Volumes []VolumeMeta
 	Path    string
-	Extras  []BookVolumeBasicMeta
+	ModTime time.Time
+	Extras  []VolumeMeta
 }
 
-type LibraryOptions struct {
-	AcceptFileTypes   internalstrings.Set
-	AcceptHiddenFiles bool
+type classifiedEntries struct {
+	volumes     []fs.DirEntry // all should be files
+	directories []fs.DirEntry // other directories
 }
 
-func (p *LibraryOptions) filterAcceptFiles(root string, files []fs.DirEntry) (accepted []fs.DirEntry, notAccepted []fs.DirEntry) {
-	for i := range files {
-		file := files[i]
-		path := filepath.Join(root, file.Name())
-		if !p.AcceptHiddenFiles {
-			if isHidden, err := isHiddenFile(path); err != nil || isHidden {
-				if err != nil {
-					log.Errorf("determine file %s hidden error: %s", path, err)
-				}
-				notAccepted = append(notAccepted, file)
-				continue
-			}
-		}
-
-		ext := filepath.Ext(file.Name())
-		if !file.IsDir() && (p.AcceptFileTypes.Len() == 0 || p.AcceptFileTypes.Contains(ext)) {
-			accepted = append(accepted, file)
-		} else {
-			notAccepted = append(notAccepted, file)
-		}
-	}
-
-	return
+type LibraryWalker struct {
+	Predict func(*BookMeta) bool // before parse volumes
+	Handle  func(*BookMeta)
 }
 
-type LibraryOption func(*LibraryOptions)
+type LibraryWalkerFactory func() LibraryWalker
 
-func LibraryOptionDefault(options *LibraryOptions) {
-	options.AcceptFileTypes = internalstrings.NewSet(".zip", ".rar", ".7z")
-}
-
-func LibraryOptionAcceptFileTypes(types ...string) LibraryOption {
-	return func(options *LibraryOptions) {
-		options.AcceptFileTypes.Add(types...)
-	}
-}
-
-type WalkBookFunc func(b *BookMeta)
-
-func WalkLibrary(root string, fn WalkBookFunc, options ...LibraryOption) error {
-	opt := LibraryOptions{
-		AcceptFileTypes: internalstrings.NewSet(),
-	}
+func WalkLibrary(root string, wf LibraryWalkerFactory, options ...Option) error {
+	opt := DefaultOptions()
 	for _, apply := range options {
 		apply(&opt)
 	}
@@ -76,24 +43,24 @@ func WalkLibrary(root string, fn WalkBookFunc, options ...LibraryOption) error {
 		return errors.New("not directory")
 	}
 
-	return walkDir(root, fn, &opt)
+	return walkDir(root, info, wf, &opt)
 }
 
-func walkDir(root string, fn WalkBookFunc, options *LibraryOptions) error {
+func walkDir(root string, info os.FileInfo, wf LibraryWalkerFactory, options *Options) error {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return err
 	}
 
-	acceptFiles, notAccept := options.filterAcceptFiles(root, entries)
-	if len(acceptFiles) == 0 {
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-
+	cf := options.classifyFiles(root, entries)
+	if len(cf.volumes) == 0 {
+		for _, entry := range cf.directories {
 			path1 := filepath.Join(root, entry.Name())
-			if err := walkDir(path1, fn, options); err != nil {
+			dirInfo, err := os.Lstat(path1)
+			if err != nil {
+				return err
+			}
+			if err := walkDir(path1, dirInfo, wf, options); err != nil {
 				return err
 			}
 		}
@@ -103,9 +70,10 @@ func walkDir(root string, fn WalkBookFunc, options *LibraryOptions) error {
 
 	book := BookMeta{
 		Name:    BookNameMeta{},
-		Volumes: []BookVolumeBasicMeta{},
+		Volumes: []VolumeMeta{},
 		Path:    root,
-		Extras:  []BookVolumeBasicMeta{},
+		ModTime: info.ModTime(),
+		Extras:  []VolumeMeta{},
 	}
 
 	bookName, err := ParseBookName(filepath.Base(root))
@@ -113,49 +81,77 @@ func walkDir(root string, fn WalkBookFunc, options *LibraryOptions) error {
 		log.Errorf("parse book name (%s) error: %s", root, err)
 		return err
 	}
-
 	book.Name = *bookName
-	for _, f := range acceptFiles {
+
+	walker := wf()
+	if !walker.Predict(&book) {
+		return nil
+	}
+	for _, f := range cf.volumes {
 		volPath := filepath.Join(root, f.Name())
-		vol := ParseBookVolumeBasic(volPath)
-		book.Volumes = append(book.Volumes, vol)
+		vol, err := ParseBookVolume(volPath, options)
+		if err != nil {
+			log.Errorf("parse vol %s error: %s", volPath, err)
+			continue // parse remaining files
+		}
+
+		if len(vol.Files) == 0 {
+			log.Debugf("volume file is empty: %s", volPath)
+			continue
+		}
+
+		book.Volumes = append(book.Volumes, *vol)
 	}
 
-	for i := range notAccept {
-		entry := notAccept[i]
-		if entry.IsDir() {
-			path1 := filepath.Join(root, entry.Name())
-			if err := walkBookExtraDir(path1, &book, options); err != nil {
-				return err
-			}
+	if options.SortVolumes != nil {
+		options.SortVolumes(book.Volumes)
+		for i := range book.Volumes {
+			book.Volumes[i].ID = i + 1 // assign order id here
 		}
 	}
 
-	if fn != nil {
-		fn(&book)
+	for i := range cf.directories {
+		entry := cf.directories[i]
+		path1 := filepath.Join(root, entry.Name())
+		if err := walkBookExtraDir(path1, &book, options); err != nil {
+			return err
+		}
 	}
+
+	if options.SortVolumes != nil {
+		options.SortVolumes(book.Extras)
+	}
+
+	walker.Handle(&book)
 	return nil
 }
 
-func walkBookExtraDir(root string, book *BookMeta, options *LibraryOptions) error {
+func walkBookExtraDir(root string, book *BookMeta, options *Options) error {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return err
 	}
 
-	acceptFiles, notAccept := options.filterAcceptFiles(root, entries)
-	for i := range acceptFiles {
+	cf := options.classifyFiles(root, entries)
+	for i := range cf.volumes {
 		// add to book extra
-		volPath := filepath.Join(root, acceptFiles[i].Name())
-		vol := ParseBookVolumeBasic(volPath)
-		book.Extras = append(book.Extras, vol)
-	}
-
-	for i := range notAccept {
-		entry := notAccept[i]
-		if !entry.IsDir() {
+		volPath := filepath.Join(root, cf.volumes[i].Name())
+		vol, err := ParseBookVolume(volPath, options)
+		if err != nil {
+			log.Errorf("parse extra vol %s error: %s", volPath, err)
 			continue
 		}
+
+		if len(vol.Files) == 0 {
+			log.Debugf("extra file is empty: %s", volPath)
+			continue
+		}
+
+		book.Extras = append(book.Extras, *vol)
+	}
+
+	for i := range cf.directories {
+		entry := cf.directories[i]
 		path1 := filepath.Join(root, entry.Name())
 		if err := walkBookExtraDir(path1, book, options); err != nil {
 			return err

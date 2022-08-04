@@ -12,7 +12,8 @@ import (
 )
 
 type toolsCmd struct {
-	db db.Interface
+	db                db.Interface
+	ignoreBookModTime bool
 }
 
 func (t *toolsCmd) setDatabase(_ *cobra.Command, _ []string) error {
@@ -33,10 +34,11 @@ func (t *toolsCmd) setDatabase(_ *cobra.Command, _ []string) error {
 func (t *toolsCmd) addLibrary(cmd *cobra.Command, args []string) error {
 	cmd.SilenceUsage = true
 	lib := db.Library{
-		CreateAt: time.Now(),
+		CreateAt: db.NewTime(time.Now()),
 		Name:     args[0],
 		Path:     args[1],
 	}
+
 	if err := t.db.CreateLibrary(cmd.Context(), &lib); err != nil {
 		log.Errorf("create library error: %s", err)
 		return err
@@ -53,29 +55,31 @@ func (t *toolsCmd) scanLibrary(cmd *cobra.Command, args []string) error {
 	}
 
 	cmd.SilenceUsage = true
-	scanner := tasks.NewLibraryScanner(t.db)
-	return scanner.Once(id)
+	scanner := tasks.NewLibraryScanner(t.db,
+		tasks.ScanIgnoreBookModTime(t.ignoreBookModTime))
+	return scanner.Once(cmd.Context(), id)
 }
 
 func init() {
 	var cmd toolsCmd
+	addLib := &cobra.Command{
+		Use:     "addlib <name> <path>",
+		Args:    cobra.ExactArgs(2),
+		PreRunE: cmd.setDatabase,
+		RunE:    cmd.addLibrary,
+	}
+	scanLib := &cobra.Command{
+		Use:     "scanlib <id>",
+		Args:    cobra.ExactArgs(1),
+		PreRunE: cmd.setDatabase,
+		RunE:    cmd.scanLibrary,
+	}
+	scanLib.Flags().BoolVar(&cmd.ignoreBookModTime, "ignore-book-modtime", false, "ignore book last mod time")
 	realCmd := &cobra.Command{
 		Use:   "tools",
 		Short: "tools collection",
 	}
-	realCmd.AddCommand(
-		&cobra.Command{
-			Use:     "addlib <name> <path>",
-			Args:    cobra.ExactArgs(2),
-			PreRunE: cmd.setDatabase,
-			RunE:    cmd.addLibrary,
-		},
-		&cobra.Command{
-			Use:     "scanlib <id>",
-			Args:    cobra.ExactArgs(1),
-			PreRunE: cmd.setDatabase,
-			RunE:    cmd.scanLibrary,
-		})
+	realCmd.AddCommand(addLib, scanLib)
 	rootCmd.AddCommand(realCmd)
 	realCmd.PersistentFlags().StringP("dsn", "", "", "data source name, like postgres://localhost:5432/db?sslmode=disable")
 	_ = viper.BindPFlag("dsn", realCmd.Flags().Lookup("dsn"))

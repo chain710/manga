@@ -1,0 +1,4 @@
+/*https://vuetifyjs.com/en/getting-started/frequently-asked-questions/#questions*/
+html {
+    overflow-y: auto !important;
+}

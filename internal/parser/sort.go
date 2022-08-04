@@ -2,23 +2,85 @@ package parser
 
 import (
 	"github.com/chain710/manga/internal/arc"
+	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 )
 
-type sortByName []arc.File
+func less(x, y []int, xs, ys string) bool {
+	var i int
+	for i = 0; i < len(x) && i < len(y); i++ {
+		if x[i] == y[i] {
+			continue
+		} else if x[i] < y[i] {
+			return true
+		} else {
+			return false
+		}
+	}
 
-func (s sortByName) Len() int {
-	return len(s)
+	if len(x) != len(y) {
+		return len(x) < len(y)
+	} else {
+		return xs < ys
+	}
 }
 
-func (s sortByName) Less(i, j int) bool {
-	return s[i].Name() < s[j].Name()
+type digitsExtractor func(int) ([]int, string)
+
+func extractVolumeMetaDigits(vols []VolumeMeta) digitsExtractor {
+	cache := make(map[string][]int)
+	r := regexp.MustCompile(`\d+`)
+	return func(i int) ([]int, string) {
+		p := filepath.Base(vols[i].Path)
+		x, ok := cache[p]
+		if ok {
+			return x, p
+		}
+
+		dlist := r.FindAllString(p, -1)
+		digits := make([]int, len(dlist))
+		for j, d := range dlist {
+			val, err := strconv.Atoi(d)
+			if err != nil {
+				panic(err) // should not happen
+			}
+			digits[j] = val
+		}
+		cache[p] = digits
+		return digits, p
+	}
 }
 
-func (s sortByName) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
+func extractArchiveFileDigits(files []arc.File) digitsExtractor {
+	cache := make(map[string][]int)
+	r := regexp.MustCompile(`\d+`)
+	return func(i int) ([]int, string) {
+		p := files[i].Name()
+		x, ok := cache[p]
+		if ok {
+			return x, p
+		}
+
+		dlist := r.FindAllString(p, -1)
+		digits := make([]int, len(dlist))
+		for j, d := range dlist {
+			val, err := strconv.Atoi(d)
+			if err != nil {
+				panic(err) // should not happen
+			}
+			digits[j] = val
+		}
+		cache[p] = digits
+		return digits, p
+	}
 }
 
-func SortByName(files []arc.File) {
-	sort.Sort(sortByName(files))
+func SortSliceByDigit(slice interface{}, extract digitsExtractor) {
+	sort.Slice(slice, func(i, j int) bool {
+		di, si := extract(i)
+		dj, sj := extract(j)
+		return less(di, dj, si, sj)
+	})
 }

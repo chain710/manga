@@ -3,6 +3,7 @@ package arc
 import (
 	internalstrings "github.com/chain710/manga/internal/strings"
 	"github.com/stretchr/testify/require"
+	"path/filepath"
 	"testing"
 )
 
@@ -16,15 +17,17 @@ func TestOpen(t *testing.T) {
 		{
 			name: "zip",
 			path: "testdata/1.zip",
-			expect: internalstrings.NewSet("story1/begin.txt",
-				"story2/extra/doc.txt",
+			expect: internalstrings.NewSet(nil,
+				filepath.Join("story1", "begin.txt"),
+				filepath.Join("story2", "extra", "doc.txt"),
 				"main.txt", "side.txt"),
 		},
 		{
 			name: "rar",
 			path: "testdata/2.rar",
-			expect: internalstrings.NewSet("story1/begin.txt",
-				"story2/extra/doc.txt",
+			expect: internalstrings.NewSet(nil,
+				filepath.Join("story1", "begin.txt"),
+				filepath.Join("story2", "extra", "doc.txt"),
 				"main.txt", "side.txt"),
 		},
 		{
@@ -47,12 +50,12 @@ func TestOpen(t *testing.T) {
 			}
 			require.NoError(t, err)
 			files := actual.GetFiles()
-			actualPaths := internalstrings.NewSet()
+			actualPaths := internalstrings.NewSet(nil)
 			for _, file := range files {
 				actualPaths.Add(file.Name())
 			}
 
-			require.Equal(t, tt.expect, actualPaths)
+			require.Equal(t, tt.expect.SortedList(), actualPaths.SortedList())
 		})
 	}
 }
@@ -61,9 +64,9 @@ func TestRead(t *testing.T) {
 	archive := "testdata/2.rar"
 	a, err := Open(archive)
 	require.NoError(t, err)
-	gf, err := a.GetFile("story2/extra/doc.txt")
+	gf, err := a.GetFile(filepath.Join("story2", "extra", "doc.txt"))
 	require.NoError(t, err)
-	data, err := a.ReadFile(*gf)
+	data, err := a.ReadFileAt(gf.offset)
 	require.NoError(t, err)
 	require.Equal(t, "world", string(data))
 }
@@ -84,13 +87,13 @@ func TestArchive_ReadFile(t *testing.T) {
 		{
 			name:          "rar-1",
 			archiveFile:   "testdata/2.rar",
-			fileInArchive: "story2/extra/doc.txt",
+			fileInArchive: filepath.Join("story2", "extra", "doc.txt"),
 			expectContent: "world",
 		},
 		{
 			name:          "zip",
 			archiveFile:   "testdata/1.zip",
-			fileInArchive: "story1/begin.txt",
+			fileInArchive: filepath.Join("story1", "begin.txt"),
 			expectContent: "introduction",
 		},
 	}
@@ -100,7 +103,7 @@ func TestArchive_ReadFile(t *testing.T) {
 			require.NoError(t, err)
 			file, err := a.GetFile(tt.fileInArchive)
 			require.NoError(t, err)
-			actual, err := a.ReadFile(*file)
+			actual, err := a.ReadFileAt(file.offset)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectContent, string(actual))
 		})
