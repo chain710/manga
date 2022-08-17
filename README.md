@@ -12,4 +12,5 @@
 
 ## TODO front end
 - [ ] Reader gesture, read mode: smart(left=>right, right=>left)
+- [ ] reader image rotation
 - [ ] book, volume progress
