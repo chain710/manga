@@ -15,7 +15,7 @@ type LibraryWatcherOption func(*LibraryWatcher)
 
 func WithSerializerWorker(count int) LibraryWatcherOption {
 	return func(sd *LibraryWatcher) {
-		sd.workerCount = count
+		sd.serializeWorkerCount = count
 	}
 }
 
@@ -33,10 +33,12 @@ func WithWatchInterval(duration time.Duration) LibraryWatcherOption {
 
 func NewLibraryWatcher(db db.Interface, options ...LibraryWatcherOption) *LibraryWatcher {
 	s := &LibraryWatcher{
-		database:    db,
-		interval:    time.Hour * 24,
-		q:           workqueue.NewRetryQueue("scanner", workqueue.NewClock()),
-		workerCount: 1,
+		database:             db,
+		interval:             time.Hour * 24,
+		serializeQueue:       workqueue.NewRetryQueue("scanner.serialize", clk),
+		scanQueue:            workqueue.NewRetryQueue("scanner.scan", clk),
+		serializeWorkerCount: 1,
+		scanWorkerCount:      1,
 	}
 
 	for _, apply := range options {
@@ -50,27 +52,34 @@ func NewLibraryWatcher(db db.Interface, options ...LibraryWatcherOption) *Librar
 LibraryWatcher watch library changes and update database
 */
 type LibraryWatcher struct {
-	database     db.Interface
-	interval     time.Duration
-	q            workqueue.RetryInterface
-	workerCount  int // serialize worker count
-	scanOptions  []scanner.Option
-	volumesCache *cache.Volumes
+	database             db.Interface
+	interval             time.Duration
+	scanQueue            workqueue.RetryInterface // libraryID in queue
+	serializeQueue       workqueue.RetryInterface
+	serializeWorkerCount int // serialize worker count
+	scanWorkerCount      int
+	scanOptions          []scanner.Option
+	volumesCache         *cache.Volumes
 }
 
 func (s *LibraryWatcher) Start(ctx context.Context) {
-	for i := 0; i < s.workerCount; i++ {
+	for i := 0; i < s.serializeWorkerCount; i++ {
 		go s.serialize(ctx, i)
+	}
+
+	for i := 0; i < s.scanWorkerCount; i++ {
+		go s.scan(ctx, i)
 	}
 
 	ticker := time.NewTicker(s.interval)
 	for {
 		select {
 		case <-ctx.Done():
-			s.q.ShutDown()
+			s.serializeQueue.ShutDown()
+			s.scanQueue.ShutDown()
 			return
 		case <-ticker.C:
-			sc := scanner.New(s.q, s.database, s.scanOptions...)
+			sc := scanner.New(s.serializeQueue, s.database, s.scanOptions...)
 			if err := sc.Scan(ctx); err != nil {
 				log.Errorf("scan error: %s", err)
 			}
@@ -78,8 +87,18 @@ func (s *LibraryWatcher) Start(ctx context.Context) {
 	}
 }
 
+// AddLibrary add library to scan queue
+func (s *LibraryWatcher) AddLibrary(library db.Library) error {
+	return s.scanQueue.Add(&libraryItem{library})
+}
+
+// AddBook add book to scan queue
+func (s *LibraryWatcher) AddBook(book db.Book) error {
+	return s.scanQueue.Add(&bookItem{book})
+}
+
 func (s *LibraryWatcher) Once(ctx context.Context, id int64) error {
-	sc := scanner.New(s.q, s.database, s.scanOptions...)
+	sc := scanner.New(s.serializeQueue, s.database, s.scanOptions...)
 	lib, err := s.database.GetLibrary(ctx, id)
 	if err != nil {
 		log.Errorf("get library %d error: %s", id, err)
@@ -91,16 +110,53 @@ func (s *LibraryWatcher) Once(ctx context.Context, id int64) error {
 		return err
 	}
 
-	s.q.ShutDown()
+	s.serializeQueue.ShutDown()
 	s.serialize(ctx, 0)
 	return nil
 }
 
+func (s *LibraryWatcher) scan(ctx context.Context, worker int) {
+	for {
+		item, shutdown := s.scanQueue.Get()
+		if shutdown {
+			log.Infof("scanner %d shutdown", worker)
+			return
+		}
+
+		switch val := item.(type) {
+		case *libraryItem:
+			s.scanLibrary(ctx, &val.Library)
+		case *bookItem:
+			s.scanBook(&val.Book)
+		default:
+			panic(fmt.Errorf("unknown item type: %+v", item))
+		}
+
+		s.scanQueue.Done(item, nil)
+	}
+}
+
+func (s *LibraryWatcher) scanLibrary(ctx context.Context, lib *db.Library) {
+	sc := scanner.New(s.serializeQueue, s.database, s.scanOptions...)
+	if err := sc.ScanLibrary(ctx, lib); err != nil {
+		log.Errorf("scan lib %d error: %s", lib.ID, err)
+		return
+	}
+}
+
+func (s *LibraryWatcher) scanBook(book *db.Book) {
+	sc := scanner.New(s.serializeQueue, s.database, s.scanOptions...)
+	if err := sc.ScanBook(book); err != nil {
+		log.Errorf("scan book %d error: %s", book.ID, err)
+		return
+	}
+}
+
 func (s *LibraryWatcher) serialize(ctx context.Context, worker int) {
 	for {
-		item, shutdown := s.q.Get()
+		item, shutdown := s.serializeQueue.Get()
 		if shutdown {
-			log.Infof("book scanner %d shutdown", worker)
+			log.Infof("serializer %d shutdown", worker)
 			return
 		}
 
@@ -140,4 +196,42 @@ func (s *LibraryWatcher) evictVolumeCache(b *db.Book) {
 	for _, vol := range b.Extras {
 		s.volumesCache.Remove(vol.ID)
 	}
+}
+
+type libraryItem struct{ db.Library }
+type libraryIndex int64
+
+func (s *libraryItem) Index() interface{} {
+	return libraryIndex(s.ID)
+}
+
+func (s *libraryItem) IsReplaceable() bool {
+	return true
+}
+
+func (s *libraryItem) Equal(i interface{}) bool {
+	other, ok := i.(*libraryItem)
+	if !ok {
+		return false
+	}
+	return s.ID == other.ID && s.Path == other.Path
+}
+
+type bookItem struct{ db.Book }
+type bookIndex int64
+
+func (s *bookItem) Index() interface{} {
+	return bookIndex(s.ID)
+}
+
+func (s *bookItem) IsReplaceable() bool {
+	return true
+}
+
+func (s *bookItem) Equal(i interface{}) bool {
+	other, ok := i.(*bookItem)
+	if !ok {
+		return false
+	}
+	return s.ID == other.ID && s.Path == other.Path
 }
