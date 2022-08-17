@@ -1,6 +1,8 @@
 package util
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"github.com/jxskiss/base62"
 	"hash/fnv"
@@ -30,4 +32,10 @@ func FileHash(path string) (string, error) {
 	h64 := fnv.New64()
 	_, _ = h64.Write(data)
 	return base62.EncodeToString(h64.Sum(nil)), nil
+}
+
+func ImageHash(data []byte) string {
+	h := md5.New()
+	_, _ = h.Write(data)
+	return hex.EncodeToString(h.Sum(nil))
 }

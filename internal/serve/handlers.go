@@ -11,6 +11,7 @@ import (
 	"github.com/chain710/manga/internal/log"
 	"github.com/chain710/manga/internal/tasks"
 	"github.com/chain710/manga/internal/types"
+	"github.com/chain710/manga/internal/util"
 	"github.com/disintegration/imaging"
 	"github.com/gin-gonic/gin"
 )
@@ -35,12 +36,13 @@ var (
 )
 
 type handlers struct {
-	config        Config
-	database      db.Interface
-	archiveCache  *arc.ArchiveCache
-	volumesCache  *cache.Volumes
-	imagesCache   *cache.Images
-	imagePrefetch *tasks.ImagePrefetch
+	config          Config
+	database        db.Interface
+	archiveCache    *arc.ArchiveCache
+	volumesCache    *cache.Volumes
+	volumePageCache *cache.Images
+	thumbCache      *cache.Images
+	imagePrefetch   *tasks.ImagePrefetch
 }
 
 func (h *handlers) registerRoutes(router *gin.Engine) {
@@ -53,12 +55,17 @@ func (h *handlers) registerRoutes(router *gin.Engine) {
 	v1.GET("/book", wrapJSONHandler(h.apiListBooks))
 	v1.PATCH("/book/:bid", wrapJSONHandler(h.apiPatchBook))
 	v1.GET("/book/:bid", wrapJSONHandler(h.apiGetBook))
-	v1.GET("/book/:bid/thumb", wrapImageHandler(h.apiGetBookThumbnail))
+	v1.GET("/book/:bid/thumb", wrapImageHandler(h.apiGetBookThumbnail, h.thumbCache))
+	v1.POST("/book/:bid/thumb", wrapJSONHandler(h.apiSetBookThumbnail))
 	v1.GET("/volume/:vid", wrapJSONHandler(h.apiGetVolume))
-	v1.GET("/volume/:vid/thumb", wrapImageHandler(h.apiGetVolumeThumbnail))
-	v1.GET("/volume/:vid/read/:page", wrapImageHandler(h.apiReadPage))
-	v1.GET("/volume/:vid/read/:page/thumb", wrapImageHandler(h.apiGetPageThumbnail))
+	// NOTE get/set thumb url path must be exact same to make sure evict thumb cache work
+	v1.GET("/volume/:vid/thumb", wrapImageHandler(h.apiGetVolumeThumbnail, h.thumbCache))
+	v1.POST("/volume/:vid/thumb", wrapJSONHandler(h.apiSetVolumeThumbnail))
+	v1.GET("/volume/:vid/crop/:page/:rect", wrapImageHandler(h.apiCropPage, nil))
+	v1.GET("/volume/:vid/read/:page", wrapImageHandler(h.apiReadPage, nil))
+	v1.GET("/volume/:vid/read/:page/thumb", wrapImageHandler(h.apiGetPageThumbnail, h.thumbCache))
 	v1.POST("/batch/volume/progress", wrapJSONHandler(h.apiUpdateVolumeProgress))
+	v1.GET("/fs/listdir", wrapJSONHandler(h.apiListDirectory))
 }
 
 func (h *handlers) apiListLibraries(ctx *gin.Context) (interface{}, error) {
@@ -239,7 +246,7 @@ func (h *handlers) apiGetVolume(ctx *gin.Context) (interface{}, error) {
 	}
 
 	logger := log.With("volume", uriParam.VolumeID)
-	vol, err := h.getVolume(ctx, uriParam.VolumeID)
+	vol, err := h.database.GetVolume(ctx, db.GetVolumeOptions{ID: uriParam.VolumeID})
 	if err != nil {
 		logger.Errorf("get volume error: %s", err)
 		return nil, err
@@ -293,7 +300,7 @@ func (h *handlers) apiGetBookThumbnail(ctx *gin.Context) (*types.Image, error) {
 	}
 
 	if thumb == nil {
-		logger.Debugf("thumb not found, try default")
+		logger.Debugf("thumb not found")
 		return nil, errNotFound
 	}
 
@@ -303,7 +310,76 @@ func (h *handlers) apiGetBookThumbnail(ctx *gin.Context) (*types.Image, error) {
 		return nil, err
 	}
 
-	return &types.Image{Data: thumb.Thumbnail, Format: format, H: cfg.Height, W: cfg.Width}, nil
+	return &types.Image{Data: thumb.Thumbnail, Hash: thumb.Hash, Format: format, H: cfg.Height, W: cfg.Width}, nil
+}
+
+func (h *handlers) apiSetBookThumbnail(ctx *gin.Context) (interface{}, error) {
+	var uriParam struct {
+		BookID int64 `uri:"bid"`
+	}
+	if err := ctx.ShouldBindUri(&uriParam); err != nil {
+		log.Debugf("bind uri error: %s", err)
+		return nil, errInvalidRequest
+	}
+
+	data, err := ctx.GetRawData()
+	if err != nil {
+		log.Errorf("get raw data error: %s", err)
+		return nil, err
+	}
+
+	// make sure post data is image using DecodeConfig
+	_, format, err := imagehelper.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		log.Errorf("post data is not image: %s", err)
+		return nil, err
+	}
+
+	if err := h.database.SetBookThumbnail(ctx, db.BookThumbnail{
+		ID:        uriParam.BookID,
+		Hash:      util.ImageHash(data),
+		Thumbnail: data,
+	}); err != nil {
+		log.Errorf("set book %d thumb error: %s", uriParam.BookID, err)
+		return nil, err
+	}
+
+	// evict cache
+	key := ctx.Request.URL.Path
+	h.thumbCache.Remove(key)
+	log.Infof("set book %d thumb (format %s) ok. remove cache: %s", uriParam.BookID, format, key)
+	return nil, nil
+}
+
+func (h *handlers) apiCropPage(ctx *gin.Context) (*types.Image, error) {
+	var uriParam struct {
+		VolumeID int64  `uri:"vid"`
+		Page     int    `uri:"page"`
+		Rect     string `uri:"rect"`
+	}
+	if err := ctx.ShouldBindUri(&uriParam); err != nil {
+		log.Debugf("bind uri error: %s", err)
+		return nil, errInvalidRequest
+	}
+
+	rect, err := parseRect(uriParam.Rect)
+	if err != nil {
+		log.Debugf("parse rect `%s` error: %s", uriParam.Rect, err)
+		return nil, errInvalidRequest
+	}
+
+	vol, err := h.database.GetVolume(ctx, db.GetVolumeOptions{ID: uriParam.VolumeID})
+	if err != nil {
+		log.Errorf("get volume %d error: %s", uriParam.VolumeID, err)
+		return nil, err
+	}
+
+	img, err := h.cropAsFitThumb(vol, uriParam.Page, rect)
+	if err != nil {
+		log.Errorf("crop as fit thumb error: %s", err)
+		return nil, err
+	}
+	return img, nil
 }
 
 func (h *handlers) apiGetVolumeThumbnail(ctx *gin.Context) (*types.Image, error) {
@@ -332,7 +408,45 @@ func (h *handlers) apiGetVolumeThumbnail(ctx *gin.Context) (*types.Image, error)
 		return nil, err
 	}
 
-	return &types.Image{Data: thumb.Thumbnail, Format: format, H: cfg.Height, W: cfg.Width}, nil
+	return &types.Image{Data: thumb.Thumbnail, Hash: thumb.Hash, Format: format, H: cfg.Height, W: cfg.Width}, nil
+}
+
+func (h *handlers) apiSetVolumeThumbnail(ctx *gin.Context) (interface{}, error) {
+	var uriParam struct {
+		VolumeID int64 `uri:"vid"`
+	}
+	if err := ctx.ShouldBindUri(&uriParam); err != nil {
+		log.Debugf("bind uri error: %s", err)
+		return nil, errInvalidRequest
+	}
+
+	data, err := ctx.GetRawData()
+	if err != nil {
+		log.Errorf("get raw data error: %s", err)
+		return nil, err
+	}
+
+	// make sure post data is image using DecodeConfig
+	_, format, err := imagehelper.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		log.Errorf("post data is not image: %s", err)
+		return nil, err
+	}
+
+	if err := h.database.SetVolumeThumbnail(ctx, db.VolumeThumbnail{
+		ID:        uriParam.VolumeID,
+		Hash:      util.ImageHash(data),
+		Thumbnail: data,
+	}); err != nil {
+		log.Errorf("set book %d thumb error: %s", uriParam.VolumeID, err)
+		return nil, err
+	}
+
+	// evict cache
+	key := ctx.Request.URL.Path
+	h.thumbCache.Remove(key)
+	log.Infof("set volume %d thumb (format %s) ok. remove cache: %s", uriParam.VolumeID, format, key)
+	return nil, nil
 }
 
 func (h *handlers) apiReadPage(ctx *gin.Context) (*types.Image, error) {
@@ -346,7 +460,7 @@ func (h *handlers) apiReadPage(ctx *gin.Context) (*types.Image, error) {
 		return nil, errInvalidRequest
 	}
 
-	vol, err := h.getVolume(ctx, uriParam.VolumeID)
+	vol, err := h.database.GetVolume(ctx, db.GetVolumeOptions{ID: uriParam.VolumeID})
 	if err != nil {
 		log.Errorf("get volume %d error: %s", uriParam.VolumeID, err)
 		return nil, err
@@ -356,18 +470,6 @@ func (h *handlers) apiReadPage(ctx *gin.Context) (*types.Image, error) {
 		getImageOptions{prefetch: h.config.PrefetchImages, updateCache: true})
 	if err != nil {
 		return nil, err
-	}
-
-	volumeProgress := db.VolumeProgressOptions{
-		BookID:   vol.BookID,
-		VolumeID: vol.ID,
-		Complete: uriParam.Page == len(vol.Files),
-		Page:     uriParam.Page,
-	}
-
-	// set read progress
-	if err := h.database.SetVolumeProgress(ctx, volumeProgress); err != nil {
-		log.Errorf("set volume %d progress error: %s", uriParam.VolumeID, err)
 	}
 
 	return img, nil
@@ -385,7 +487,7 @@ func (h *handlers) apiGetPageThumbnail(ctx *gin.Context) (*types.Image, error) {
 	}
 
 	logger := log.With("volume", uriParam.VolumeID, "page", uriParam.Page)
-	vol, err := h.getVolume(ctx, uriParam.VolumeID)
+	vol, err := h.database.GetVolume(ctx, db.GetVolumeOptions{ID: uriParam.VolumeID})
 	if err != nil {
 		logger.Errorf("get volume error: %s", err)
 		return nil, err
@@ -397,12 +499,12 @@ func (h *handlers) apiGetPageThumbnail(ctx *gin.Context) (*types.Image, error) {
 	}
 
 	// decode image for thumbnail
-	image, err := imaging.Decode(bytes.NewReader(img.Data))
+	image, err := imagehelper.DecodeFromBytes(img.Data)
 	if err != nil {
 		logger.Errorf("decode page image error: %s", err)
 		return nil, err
 	}
-	// TODO cache thumb; w&h come from params
+	// TODO w&h come from params
 	const width = 140
 	const height = 200
 	image = imaging.Fit(image, width, height, imaging.Lanczos)
@@ -414,6 +516,7 @@ func (h *handlers) apiGetPageThumbnail(ctx *gin.Context) (*types.Image, error) {
 
 	return &types.Image{
 		Data:   buf.Bytes(),
+		Hash:   util.ImageHash(buf.Bytes()),
 		Format: "jpeg",
 		H:      height,
 		W:      width,
@@ -426,7 +529,10 @@ func (h *handlers) apiUpdateVolumeProgress(ctx *gin.Context) (interface{}, error
 		return nil, err
 	}
 
-	opt := db.BatchUpdateVolumeProgressOptions{IDs: req.VolumeIDs, Operate: req.Operator}
+	opt := db.BatchUpdateVolumeProgressOptions{Operate: req.Operator}
+	for _, vol := range req.Volumes {
+		opt.SetVolumes = append(opt.SetVolumes, db.SetVolumeProgress{VolumeID: vol.ID, Page: vol.Page})
+	}
 	if err := h.database.BatchUpdateVolumeProgress(ctx, opt); err != nil {
 		log.Errorf("batch update volume progress error: %s", err)
 		return nil, err

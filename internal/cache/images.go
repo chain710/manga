@@ -18,16 +18,11 @@ type Images struct {
 	cache *lru.Cache
 }
 
-type ImageKey struct {
-	Volume string // volume's hash
-	Page   int
-}
-
-func (a *Images) Has(k ImageKey) bool {
+func (a *Images) Has(k interface{}) bool {
 	return a.cache.Contains(k)
 }
 
-func (a *Images) Get(k ImageKey) (types.Image, bool) {
+func (a *Images) Get(k interface{}) (types.Image, bool) {
 	value, ok := a.cache.Get(k)
 	if !ok {
 		return types.Image{}, false
@@ -35,10 +30,10 @@ func (a *Images) Get(k ImageKey) (types.Image, bool) {
 	return value.(types.Image), true
 }
 
-func (a *Images) Set(k ImageKey, i types.Image) {
+func (a *Images) Set(k interface{}, i types.Image) {
 	a.cache.Add(k, i)
 }
 
-func (a *Images) Remove(k ImageKey) {
+func (a *Images) Remove(k interface{}) {
 	a.cache.Remove(k)
 }

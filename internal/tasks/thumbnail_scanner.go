@@ -83,14 +83,14 @@ func (d *ThumbnailScanner) Start(ctx context.Context) {
 			d.q.ShutDown()
 			break
 		case <-ticker.C():
-			_ = d.listVolumes(ctx)
+			_ = d.listVolumes(ctx, false)
 			_ = d.listBooks(ctx)
 		}
 	}
 }
 
-func (d *ThumbnailScanner) Once(ctx context.Context) error {
-	if err := d.listVolumes(ctx); err != nil {
+func (d *ThumbnailScanner) Once(ctx context.Context, all bool) error {
+	if err := d.listVolumes(ctx, all); err != nil {
 		return err
 	}
 	if err := d.listBooks(ctx); err != nil {
@@ -105,8 +105,12 @@ func (d *ThumbnailScanner) ScanVolume(volume db.Volume) {
 	_ = d.q.Add(thumbOfVolume{volume: volume})
 }
 
-func (d *ThumbnailScanner) listVolumes(ctx context.Context) error {
-	volumes, err := d.database.ListVolumes(ctx, db.ListVolumesOptions{WithoutThumbnail: true})
+func (d *ThumbnailScanner) listVolumes(ctx context.Context, all bool) error {
+	opt := db.ListVolumesOptions{Join: db.VolumeMustNotHaveThumb}
+	if all {
+		opt.Join = ""
+	}
+	volumes, err := d.database.ListVolumes(ctx, opt)
 	if err != nil {
 		log.Errorf("list volumes error: %s", err)
 		return err
@@ -180,7 +184,12 @@ func (d *ThumbnailScanner) scanVolume(ctx context.Context, volume *db.Volume) {
 		return
 	}
 
-	if err := d.database.SetVolumeThumbnail(ctx, db.VolumeThumbnail{ID: volume.ID, Thumbnail: buf.Bytes()}); err != nil {
+	vt := db.VolumeThumbnail{
+		ID:        volume.ID,
+		Hash:      util.ImageHash(buf.Bytes()),
+		Thumbnail: buf.Bytes(),
+	}
+	if err := d.database.SetVolumeThumbnail(ctx, vt); err != nil {
 		logger.Errorf("set volume thumb error: %s", err)
 		return
 	}
@@ -201,7 +210,7 @@ func (d *ThumbnailScanner) scanBook(ctx context.Context, book *db.Book) {
 		return
 	}
 
-	bt := db.BookThumbnail{ID: book.ID, Thumbnail: thumb.Thumbnail}
+	bt := db.BookThumbnail{ID: book.ID, Hash: thumb.Hash, Thumbnail: thumb.Thumbnail}
 	if err := d.database.SetBookThumbnail(ctx, bt); err != nil {
 		logger.Errorf("set book thumb (vol %d) error: %s", thumb.ID, err)
 		return

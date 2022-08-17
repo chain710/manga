@@ -60,14 +60,16 @@ CREATE INDEX IF NOT EXISTS "volume_progress_bid_index" ON "volume_progress" ("bo
 
 CREATE TABLE IF NOT EXISTS "volume_thumbnail" (
     "id" INT NOT NULL REFERENCES "volumes" ("id") ON DELETE CASCADE,
+    "hash" VARCHAR(128) NOT NULL,
     "thumbnail" BYTEA NOT NULL,
     PRIMARY KEY ("id")
 );
 
 CREATE TABLE IF NOT EXISTS "book_thumbnail" (
     "id" INT NOT NULL REFERENCES "books" ("id") ON DELETE CASCADE,
-     "thumbnail" BYTEA NOT NULL,
-     PRIMARY KEY ("id")
+    "hash" VARCHAR(128) NOT NULL,
+    "thumbnail" BYTEA NOT NULL,
+    PRIMARY KEY ("id")
 );
 
 COMMIT;

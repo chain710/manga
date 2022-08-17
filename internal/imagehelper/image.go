@@ -1,6 +1,8 @@
 package imagehelper
 
 import (
+	"bytes"
+	"github.com/disintegration/imageorient"
 	"github.com/disintegration/imaging"
 	"github.com/lucasb-eyer/go-colorful"
 	"image"
@@ -8,7 +10,11 @@ import (
 )
 
 func DecodeConfig(r io.Reader) (image.Config, string, error) {
-	return image.DecodeConfig(r)
+	return imageorient.DecodeConfig(r)
+}
+
+func DecodeFromBytes(data []byte) (image.Image, error) {
+	return imaging.Decode(bytes.NewReader(data), imaging.AutoOrientation(true))
 }
 
 // GetChroma return chroma of image [0, 1]

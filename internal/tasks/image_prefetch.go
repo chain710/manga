@@ -8,6 +8,7 @@ import (
 	"github.com/chain710/manga/internal/imagehelper"
 	"github.com/chain710/manga/internal/log"
 	"github.com/chain710/manga/internal/types"
+	"github.com/chain710/manga/internal/util"
 )
 
 type ImagePrefetchOption func(*ImagePrefetch)
@@ -71,7 +72,7 @@ func (i *ImagePrefetch) prefetch(item prefetchImageItem) {
 	//goland:noinspection GoUnhandledErrorResult
 	defer a.Close()
 	for _, pos := range item.images {
-		k := cache.ImageKey{Volume: item.fileHash, Page: pos.Page}
+		k := types.PageKey{Volume: item.fileHash, Page: pos.Page}
 		if i.imageCache.Has(k) {
 			continue
 		}
@@ -87,6 +88,7 @@ func (i *ImagePrefetch) prefetch(item prefetchImageItem) {
 
 		img := types.Image{
 			Data:   data,
+			Hash:   util.ImageHash(data),
 			Format: format,
 			H:      cfg.Width,
 			W:      cfg.Height,

@@ -8,7 +8,7 @@ import (
 	"github.com/chain710/manga/internal/log"
 	"github.com/chain710/manga/internal/migrations"
 	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/pgx"
+	migratepgx "github.com/golang-migrate/migrate/v4/database/pgx"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	_ "github.com/jackc/pgx/v4/stdlib"
 	"github.com/jmoiron/sqlx"
@@ -31,12 +31,12 @@ func DefaultPostgresOptions() PostgresOptions {
 func NewPostgres(dataSourceName string, opt PostgresOptions) (*Postgres, error) {
 	db, err := sqlx.Connect("pgx", dataSourceName)
 	if err != nil {
-		log.Errorf("connect pgx database error: %s", err)
+		log.Errorf("connect pgx database error: %s; source: %s", err, dataSourceName)
 		return nil, err
 	}
 	db.SetMaxOpenConns(opt.MaxOpenConns)
 	db.SetConnMaxLifetime(opt.ConnMaxLifetime)
-	log.Debugf("success open pgx %s", dataSourceName)
+	log.Debugf("success open pgx")
 	return &Postgres{DB: *db}, nil
 }
 
@@ -52,7 +52,7 @@ func (p *Postgres) GetMigration() (*migrate.Migrate, error) {
 		return nil, err
 	}
 
-	driver, err := pgx.WithInstance(p.DB.DB, &pgx.Config{})
+	driver, err := migratepgx.WithInstance(p.DB.DB, &migratepgx.Config{})
 	if err != nil {
 		return nil, err
 	}
@@ -119,17 +119,20 @@ func (p *Postgres) UpdateBook(ctx context.Context, b *Book) error {
 		return err
 	}
 
-	delStmt, args, err := sqlx.In(`delete from volumes where book_id = ? and id not in (?)`,
-		b.ID, b.GetVolumeIDs())
-	if err != nil {
-		logger.Errorf("gen delete in statement error: %s", err)
-		return err
-	}
-	delStmt = tx.Rebind(delStmt)
-	_, err = tx.ExecContext(ctx, delStmt, args...)
-	if err != nil {
-		logger.Errorf("delete extra volumes error: %s", err)
-		return err
+	volumeIDS := b.GetVolumeIDs()
+	if len(volumeIDS) > 0 {
+		delStmt, args, err := sqlx.In(`delete from volumes where book_id = ? and id not in (?)`,
+			b.ID, b.GetVolumeIDs())
+		if err != nil {
+			logger.Errorf("gen delete in statement error: %s", err)
+			return err
+		}
+		delStmt = tx.Rebind(delStmt)
+		_, err = tx.ExecContext(ctx, delStmt, args...)
+		if err != nil {
+			logger.Errorf("delete extra volumes error: %s", err)
+			return err
+		}
 	}
 
 	if err := p.replaceVolumes(ctx, tx, b.Volumes); err != nil {
@@ -257,8 +260,8 @@ func (p *Postgres) ListBooks(ctx context.Context, opt ListBooksOptions) ([]Book,
 
 	ret := make([]Book, len(books))
 	for i := range books {
-		ret[i].BookTable = books[i].BookTable
-		p.setBookProgress(&ret[i], books[i].bookProgressAlias)
+		b := books[i].convert(nil)
+		ret[i] = *b
 	}
 
 	query, args, err = p.countBookQuery(opt)
@@ -287,34 +290,27 @@ func (p *Postgres) GetBook(ctx context.Context, opt GetBookOptions) (*Book, erro
 		return nil, err
 	}
 
-	var ret Book
-	ret.BookTable = book.BookTable
-	p.setBookProgress(&ret, book.bookProgressAlias)
-
-	var vols []Volume
-	if err := p.DB.SelectContext(ctx, &vols, "select * from volumes where book_id=$1 order by volume", book.ID); err != nil {
+	listVol := ListVolumesOptions{
+		BookID: &book.ID,
+		Join:   VolumeCompactProgress,
+	}
+	stmt, args := p.listVolumeQuery(listVol)
+	var vols []volumeJoin
+	if err := p.DB.SelectContext(ctx, &vols, stmt, args...); err != nil {
 		return nil, err
 	}
-
-	for _, vol := range vols {
-		if vol.Volume > 0 {
-			ret.Volumes = append(ret.Volumes, vol)
-		} else {
-			ret.Extras = append(ret.Extras, vol)
-		}
-	}
-	return &ret, nil
+	ret := book.convert(vols)
+	return ret, nil
 }
 
 func (p *Postgres) GetVolume(ctx context.Context, opt GetVolumeOptions) (*Volume, error) {
-	var vol Volume
-	if err := p.DB.GetContext(ctx, &vol,
-		`select volumes.*,b.name as book_name, b.writer from volumes left join books b on volumes.book_id = b.id 
-         where volumes.id=$1`, opt.ID); err != nil {
+	var vol volumeJoin
+	stmt, args := p.getVolumeQuery(opt)
+	if err := p.DB.GetContext(ctx, &vol, stmt, args...); err != nil {
 		return nil, err
 	}
 
-	return &vol, nil
+	return vol.convert(), nil
 }
 
 func (p *Postgres) GetVolumeNeighbour(ctx context.Context, opt GetVolumeNeighbourOptions) (*int64, *int64, error) {
@@ -344,34 +340,45 @@ func (p *Postgres) GetVolumeNeighbour(ctx context.Context, opt GetVolumeNeighbou
 	return prevID, nextID, nil
 }
 
-func (p *Postgres) SetVolumeProgress(ctx context.Context, opt VolumeProgressOptions) error {
-	now := clk.Now()
-	_, err := p.DB.NamedExecContext(ctx, `insert into volume_progress 
-    (create_at, update_at, book_id, volume_id, complete, page) 
-	values (:create_at, :update_at, :book_id, :volume_id, :complete, :page) 
-	on conflict(volume_id) do update 
-	set update_at = :update_at, book_id = :book_id, volume_id = :volume_id,
-	complete = volume_progress.complete or :complete, 
-	page = :page`,
-		map[string]interface{}{
-			"create_at": now,
-			"update_at": now,
-			"book_id":   opt.BookID,
-			"volume_id": opt.VolumeID,
-			"complete":  opt.Complete,
-			"page":      opt.Page,
-		})
-	return err
-}
-
 func (p *Postgres) BatchUpdateVolumeProgress(ctx context.Context, opt BatchUpdateVolumeProgressOptions) error {
 	type insertParams struct {
 		ID     int64 `db:"id"`
 		BookID int64 `db:"book_id"`
 	}
+	type updateParams struct {
+		insertParams
+		PageCount int `db:"page_count"`
+	}
+
 	switch opt.Operate {
+	case UpdateVolumeProgressUpdate:
+		if len(opt.SetVolumes) != 1 {
+			panic("update progress only support one")
+		}
+
+		v := opt.SetVolumes[0]
+		var update updateParams
+		if err := p.DB.GetContext(ctx, &update, `select id,book_id,page_count from volumes where id=$1`, v.VolumeID); err != nil {
+			return err
+		}
+
+		stmt := `insert into volume_progress (create_at, update_at, book_id, volume_id, complete, page) 
+values (now(),now(),$1,$2,$3::int=$4::int,$5) 
+on conflict (volume_id) 
+    do update set complete=($6::int=$7::int), page=$8, update_at=now()`
+		// NOTE can not use named exec, see: https://github.com/jmoiron/sqlx/issues/193
+		_, err := p.DB.ExecContext(ctx, stmt,
+			update.BookID,
+			v.VolumeID,
+			v.Page,
+			update.PageCount,
+			v.Page,
+			v.Page,
+			update.PageCount,
+			v.Page)
+		return err
 	case UpdateVolumeProgressComplete:
-		stmt, args, err := sqlx.In("select id,book_id from volumes where id in (?)", opt.IDs)
+		stmt, args, err := sqlx.In("select id,book_id from volumes where id in (?)", opt.IDs())
 		if err != nil {
 			log.Errorf("gen select in statement error: %s", err)
 			return err
@@ -388,7 +395,7 @@ values (now(),now(),:book_id,:id,true,0) on conflict (volume_id) do update set c
 		_, err = p.DB.NamedExecContext(ctx, stmt, filterIDs)
 		return err
 	case UpdateVolumeProgressReset:
-		stmt, args, err := sqlx.In(`delete from volume_progress where volume_id in (?)`, opt.IDs)
+		stmt, args, err := sqlx.In(`delete from volume_progress where volume_id in (?)`, opt.IDs())
 		if err != nil {
 			log.Errorf("gen delete in statement error: %s", err)
 			return err
@@ -402,10 +409,11 @@ values (now(),now(),:book_id,:id,true,0) on conflict (volume_id) do update set c
 }
 
 func (p *Postgres) SetVolumeThumbnail(ctx context.Context, thumbnail VolumeThumbnail) error {
-	stmt := `insert into volume_thumbnail (id, thumbnail) values (:id, :thumbnail) 
-                                                 on conflict(id) do update set thumbnail=:thumbnail`
+	stmt := `insert into volume_thumbnail (id, hash, thumbnail) values (:id, :hash, :thumbnail) 
+                                                 on conflict(id) do update set hash=:hash, thumbnail=:thumbnail`
 	_, err := p.DB.NamedExecContext(ctx, stmt, map[string]interface{}{
 		"id":        thumbnail.ID,
+		"hash":      thumbnail.Hash,
 		"thumbnail": thumbnail.Thumbnail,
 	})
 	return err
@@ -434,10 +442,11 @@ func (p *Postgres) GetVolumeThumbnail(ctx context.Context, opt GetVolumeThumbOpt
 }
 
 func (p *Postgres) SetBookThumbnail(ctx context.Context, thumbnail BookThumbnail) error {
-	stmt := `insert into book_thumbnail (id, thumbnail) values (:id, :thumbnail) 
-                                                 on conflict(id) do update set thumbnail=:thumbnail`
+	stmt := `insert into book_thumbnail (id, hash, thumbnail) values (:id, :hash, :thumbnail) 
+                                                 on conflict(id) do update set hash=:hash, thumbnail=:thumbnail`
 	_, err := p.DB.NamedExecContext(ctx, stmt, map[string]interface{}{
 		"id":        thumbnail.ID,
+		"hash":      thumbnail.Hash,
 		"thumbnail": thumbnail.Thumbnail,
 	})
 	return err
@@ -456,18 +465,19 @@ func (p *Postgres) GetBookThumbnail(ctx context.Context, id int64) (*BookThumbna
 }
 
 func (p *Postgres) ListVolumes(ctx context.Context, opt ListVolumesOptions) ([]Volume, error) {
-	if !opt.WithoutThumbnail {
-		panic("not implemented")
-	}
-
-	var vols []Volume
-	err := p.DB.SelectContext(ctx, &vols,
-		`select volumes.* from volumes left join volume_thumbnail vc on volumes.id = vc.id where vc.id is null`)
+	stmt, args := p.listVolumeQuery(opt)
+	var vols []volumeJoin
+	err := p.DB.SelectContext(ctx, &vols, stmt, args...)
 	if err != nil {
 		return nil, err
 	}
 
-	return vols, err
+	ret := make([]Volume, len(vols))
+	for i := range ret {
+		ret[i] = *vols[i].convert()
+	}
+
+	return ret, err
 }
 
 func (p *Postgres) replaceVolumes(ctx context.Context, tx *sqlx.Tx, volumes []Volume) error {
@@ -528,38 +538,18 @@ func (p *Postgres) replaceVolumes(ctx context.Context, tx *sqlx.Tx, volumes []Vo
 }
 
 func (p *Postgres) getBookQuery(opt GetBookOptions) (string, []interface{}) {
-	var cond string
+	var stmt []string
 	var args []interface{}
+	stmt = append(stmt, `select * from books`)
 	if opt.Path != "" {
-		cond = "path = $1"
+		stmt = append(stmt, "where path = $1")
 		args = append(args, opt.Path)
 	} else {
-		cond = "id = $1"
+		stmt = append(stmt, "where id = $1")
 		args = append(args, opt.ID)
 	}
 
-	var stmt string
-	if opt.WithoutProgress {
-		stmt = `select * from books where ` + cond
-	} else {
-		stmt = `select books.*,
-       b.page_count as read_volume_page_count,
-       b.volume as read_volume,
-       b.volume_id as read_volume_id,
-       b.page as read_volume_page,
-       b.title as read_volume_title,
-       b.create_at as read_volume_begin_at,
-       b.update_at as read_volume_at from books left join(
-       select page_count, volume, title, a.*
-                     from volumes
-                              right join (select distinct on (book_id) book_id, page, volume_id, update_at, create_at
-                                          from volume_progress
-                                          order by book_id, update_at desc) a 
-                                  on volumes.id = a.volume_id) b 
-           on books.id=b.book_id where ` + cond
-	}
-
-	return stmt, args
+	return strings.Join(stmt, " "), args
 }
 
 func (p *Postgres) patchBookStmt(opt PatchBookOptions) (string, map[string]interface{}) {
@@ -665,18 +655,85 @@ func (p *Postgres) listBookQuery(opt ListBooksOptions) (string, []interface{}, e
 	return sqlx.Named(q, args)
 }
 
-func (p *Postgres) setBookProgress(b *Book, progress bookProgressAlias) {
-	if progress.VolumeID == nil {
-		return
+func (p *Postgres) getVolumeQuery(opt GetVolumeOptions) (string, []interface{}) {
+	var stmt string
+	var args []interface{}
+	switch opt.Join {
+	case VolumeLeftJoinBookProgress: // with book and progress
+		stmt = `select volumes.*,b.name as book_name, b.writer,
+       vp.volume_id as read_volume_id,
+       volumes.volume as read_volume,
+       volumes.title as read_volume_title,
+       vp.create_at as read_volume_begin_at,
+       vp.update_at as read_volume_at,
+       vp.page as read_volume_page,
+       volumes.page_count as read_volume_page_count
+from volumes left join books b on volumes.book_id = b.id left join volume_progress vp on volumes.id = vp.volume_id
+where volumes.id=$1`
+		args = append(args, opt.ID)
+	case "":
+		stmt = `select volumes.*,b.name as book_name, b.writer from volumes left join books b on volumes.book_id = b.id 
+         where volumes.id=$1`
+		args = append(args, opt.ID)
+	default:
+		panic(fmt.Errorf("invalid join %s", opt.Join))
 	}
+	return stmt, args
+}
 
-	b.Progress = &BookProgress{
-		BookID:    b.ID,
-		UpdateAt:  *progress.LastReadAt,
-		Volume:    *progress.VolumeNo,
-		VolumeID:  *progress.VolumeID,
-		Title:     *progress.VolumeTitle,
-		Page:      *progress.Page,
-		PageCount: *progress.PageCount,
+func (p *Postgres) listVolumeQuery(opt ListVolumesOptions) (string, []interface{}) {
+	var stmt []string
+	var args []interface{}
+	switch opt.Join {
+	case VolumeCompactProgress: // with progress
+		stmt = append(stmt, `select volumes.id, 
+       volumes.book_id, volumes.create_at, volumes.path, volumes.title, volumes.volume, volumes.page_count, 
+       vp.volume_id as read_volume_id,
+       volumes.volume as read_volume,
+       volumes.title as read_volume_title,
+       vp.create_at as read_volume_begin_at,
+       vp.update_at as read_volume_at,
+       vp.page as read_volume_page,
+       volumes.page_count as read_volume_page_count
+from volumes left join volume_progress vp on volumes.id = vp.volume_id`)
+		if opt.BookID != nil {
+			stmt = append(stmt, `where volumes.book_id=$1 order by volume`)
+			args = append(args, *opt.BookID)
+		}
+	case VolumeReading:
+		stmt = append(stmt, `select volumes.id, 
+       volumes.book_id, volumes.create_at, volumes.path, volumes.title, volumes.volume, volumes.page_count, volumes.files,
+       b.name as book_name, b.writer,
+       vp.volume_id as read_volume_id,
+       volumes.volume as read_volume,
+       volumes.title as read_volume_title,
+       vp.create_at as read_volume_begin_at,
+       vp.update_at as read_volume_at,
+       vp.page as read_volume_page,
+       volumes.page_count as read_volume_page_count
+from volumes left join books b on volumes.book_id = b.id right join volume_progress vp on volumes.id = vp.volume_id and vp.complete = false`)
+		if opt.BookID != nil {
+			stmt = append(stmt, `where volumes.book_id=$1`)
+			args = append(args, *opt.BookID)
+		}
+
+		stmt = append(stmt, `order by read_volume_at desc,volume asc`)
+	case VolumeMustNotHaveThumb:
+		stmt = append(stmt,
+			`select volumes.id, 
+       volumes.book_id, volumes.create_at, volumes.path, volumes.title, volumes.volume, volumes.page_count, volumes.files
+from volumes left join volume_thumbnail vc on volumes.id = vc.id where vc.id is null`)
+		if opt.BookID != nil {
+			panic(fmt.Errorf("not support with book id"))
+		}
+	case "":
+		stmt = append(stmt, `select * from volumes`)
+		if opt.BookID != nil {
+			stmt = append(stmt, `where book_id=$1`)
+			args = append(args, *opt.BookID)
+		}
+	default:
+		panic(fmt.Errorf("invalid join %s", opt.Join))
 	}
+	return strings.Join(stmt, " "), args
 }

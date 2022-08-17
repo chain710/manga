@@ -31,23 +31,25 @@ func Start(ctx context.Context, cfg Config) {
 		ginzap.Ginzap(log.Logger(), time.RFC3339, false),
 		gingzip.Gzip(gingzip.DefaultCompression))
 	archiveCache := arc.NewArchiveCache(cfg.ArchiveCacheSize)
-	volumesCache := cache.NewVolumes(cfg.VolumeCacheSize)
-	imagesCache := cache.NewImages(cfg.ImageCacheSize)
+	pageCache := cache.NewImages(cfg.PageCacheSize)
+	log.Debugf("create page cache %d", cfg.PageCacheSize)
+	thumbCache := cache.NewImages(cfg.ThumbCacheSize)
+	log.Debugf("create thumb cache %d", cfg.ThumbCacheSize)
 	var imagePrefetch *tasks.ImagePrefetch
 	if cfg.PrefetchImages > 0 {
 		log.Debugf("enable image prefetch, count=%d queue=%d",
 			cfg.PrefetchImages, cfg.PrefetchQueue)
-		imagePrefetch = tasks.NewImagePrefetch(imagesCache, archiveCache, cfg.PrefetchQueue)
+		imagePrefetch = tasks.NewImagePrefetch(pageCache, archiveCache, cfg.PrefetchQueue)
 		go imagePrefetch.Start(ctx)
 	}
 
 	h := handlers{
-		config:        cfg,
-		database:      database,
-		archiveCache:  archiveCache,
-		volumesCache:  volumesCache,
-		imagesCache:   imagesCache,
-		imagePrefetch: imagePrefetch,
+		config:          cfg,
+		database:        database,
+		archiveCache:    archiveCache,
+		volumePageCache: pageCache,
+		thumbCache:      thumbCache,
+		imagePrefetch:   imagePrefetch,
 	}
 	h.registerRoutes(router)
 
@@ -61,7 +63,7 @@ func Start(ctx context.Context, cfg Config) {
 			if err == http.ErrServerClosed {
 				log.Infof("http server shutdown complete")
 			} else {
-				log.Errorf("http server closed unexpect: %s", err)
+				log.Panicf("http server closed unexpect: %s", err)
 			}
 		}
 	}()

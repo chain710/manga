@@ -19,10 +19,12 @@ const (
 	addr          = "addr"
 	dsn           = "dsn"
 	archiveCache  = "archive_cache"
-	volumeCache   = "volume_cache"
-	imageCache    = "image_cache"
+	pageCache     = "page_cache"
+	thumbCache    = "thumb_cache"
 	prefetchImage = "prefetch_image"
 	prefetchQueue = "prefetch_queue"
+	thumbWidth    = "thumb_width"
+	thumbHeight   = "thumb_height"
 )
 
 func (m *serveCmd) RunE(cmd *cobra.Command, _ []string) error {
@@ -32,10 +34,12 @@ func (m *serveCmd) RunE(cmd *cobra.Command, _ []string) error {
 		BaseURI:          m.baseURI,
 		DSN:              viper.GetString("dsn"),
 		ArchiveCacheSize: viper.GetInt(archiveCache),
-		VolumeCacheSize:  viper.GetInt(volumeCache),
-		ImageCacheSize:   viper.GetInt(imageCache),
+		PageCacheSize:    viper.GetInt(pageCache),
+		ThumbCacheSize:   viper.GetInt(thumbCache),
 		PrefetchImages:   viper.GetInt(prefetchImage),
 		PrefetchQueue:    viper.GetInt(prefetchQueue),
+		ThumbWidth:       viper.GetInt(thumbWidth),
+		ThumbHeight:      viper.GetInt(thumbHeight),
 	}
 
 	if err := config.Validate(); err != nil {
@@ -72,9 +76,11 @@ func init() {
 	_ = viperFlag(realCmd.Flags(), addr, ":8080", "http serve addr")
 	_ = viperFlag(realCmd.Flags(), dsn, "", "data source name, like postgres://localhost:5432/db?sslmode=disable")
 	_ = viperFlag(realCmd.Flags(), archiveCache, 100, "archive cache size")
-	_ = viperFlag(realCmd.Flags(), volumeCache, 100, "volume cache size")
-	_ = viperFlag(realCmd.Flags(), imageCache, 100, "image cache size")
+	_ = viperFlag(realCmd.Flags(), pageCache, 100, "page cache size")
+	_ = viperFlag(realCmd.Flags(), thumbCache, 100, "thumb cache size")
 	_ = viperFlag(realCmd.Flags(), prefetchImage, 5, "prefetch image count. 0 means disable")
 	_ = viperFlag(realCmd.Flags(), prefetchQueue, 16, "prefetch queue")
+	_ = viperFlag(realCmd.Flags(), thumbWidth, 210, "prefetch queue")
+	_ = viperFlag(realCmd.Flags(), thumbHeight, 297, "prefetch queue")
 	rootCmd.AddCommand(realCmd)
 }

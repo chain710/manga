@@ -15,6 +15,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"time"
 )
 
 //goland:noinspection RegExpRedundantEscape
@@ -200,13 +201,105 @@ func (l *Type) ScanLibrary(ctx context.Context, lib *db.Library) error {
 	return nil
 }
 
-func (l *Type) shouldSkipBook(info os.FileInfo, book *db.Book) bool {
+func (l *Type) getScanBookOptions(b *db.Book, options ...ScanBookOption) (*ScanBookOptions, error) {
+	var option ScanBookOptions
+	for _, apply := range options {
+		apply(&option)
+	}
+	if b != nil {
+		option.libraryID = b.LibraryID
+	}
+	if b != nil {
+		option.path = b.Path
+	}
+	if option.modTime.IsZero() {
+		info, err := os.Lstat(option.path)
+		if err != nil {
+			log.Errorf("stat book path %s error: %s", option.path, err)
+			return nil, err
+		}
+		option.modTime = info.ModTime()
+	}
+
+	if option.entries == nil {
+		entries, err := os.ReadDir(option.path)
+		if err != nil {
+			log.Errorf("readdir path %s error: %s", option.path, err)
+			return nil, err
+		}
+
+		cf := l.classifyFiles(option.path, entries)
+		option.entries = &cf
+	}
+
+	return &option, nil
+}
+
+func (l *Type) ScanBook(b *db.Book, options ...ScanBookOption) error {
+	option, err := l.getScanBookOptions(b, options...)
+	if err != nil {
+		log.Errorf("get scan book options error: %s", err)
+		return err
+	}
+
+	logger := log.With("book_path", option.path)
+	book := bookMeta{
+		Path: option.path,
+	}
+
+	book.bookNameMeta = parseBookName(filepath.Base(option.path))
+	if l.shouldSkipBook(option.modTime, b) {
+		return nil
+	}
+
+	for _, f := range option.entries.volumes {
+		volPath := filepath.Join(option.path, f.Name())
+		vol, err := l.parseVolume(volPath)
+		if err != nil {
+			logger.Errorf("parse vol %s error: %s", volPath, err)
+			continue // parse remaining files
+		}
+
+		if len(vol.Files) == 0 {
+			logger.Debugf("volume file is empty: %s", volPath)
+			continue
+		}
+
+		book.Volumes = append(book.Volumes, *vol)
+	}
+
+	if l.sortVolumes != nil {
+		l.sortVolumes(book.Volumes)
+	}
+
+	// assign sequential volume id here
+	for i := range book.Volumes {
+		book.Volumes[i].ID = i + 1
+	}
+
+	for i := range option.entries.directories {
+		entry := option.entries.directories[i]
+		entryPath := filepath.Join(option.path, entry.Name())
+		if err := l.walkExtra(entryPath, &book); err != nil {
+			return err
+		}
+	}
+
+	if l.sortVolumes != nil {
+		l.sortVolumes(book.Extras)
+	}
+
+	l.handleBook(option.libraryID, &book, b)
+	return nil
+}
+
+func (l *Type) shouldSkipBook(modTime time.Time, book *db.Book) bool {
 	if l.ignoreBookModTime || book == nil {
 		return false
 	}
 
-	if book.PathModAt.EqualTime(info.ModTime()) {
-		log.Debugf("path mod time unchanged since last scan: %s", info.Name())
+	if book.PathModAt.EqualTime(modTime) {
+		log.Debugf("path mod time unchanged since last scan: %s", book.Path)
 		return true
 	}
 
@@ -231,7 +324,6 @@ func (l *Type) handleDirs(ctx context.Context, lib *db.Library, root string, ent
 func (l *Type) walkDir(ctx context.Context, lib *db.Library, root string,
 	info os.FileInfo,
 	knownBooks map[string]db.Book) error {
-	logger := log.With("walk_root", root)
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return err
@@ -242,61 +334,23 @@ func (l *Type) walkDir(ctx context.Context, lib *db.Library, root string,
 		return l.handleDirs(ctx, lib, root, cf.directories, knownBooks)
 	}
 
-	book := bookMeta{
-		Path:    root,
-		ModTime: info.ModTime(),
-	}
-
-	book.bookNameMeta = parseBookName(filepath.Base(root))
-	bookInDatabase, err := l.db.GetBook(ctx, db.GetBookOptions{Path: root, WithoutProgress: true})
+	bookInDatabase, err := l.db.GetBook(ctx, db.GetBookOptions{Path: root})
 	if err != nil {
-		logger.Errorf("get exist book error: %s", err)
+		log.Errorf("get exist book by path %s error: %s", root, err)
 		return err
 	}
 
-	delete(knownBooks, book.Path)
-	if l.shouldSkipBook(info, bookInDatabase) {
-		return nil
+	delete(knownBooks, root)
+	if err := l.ScanBook(bookInDatabase, scanBookOptions(ScanBookOptions{
+		libraryID: lib.ID,
+		path:      root,
+		modTime:   info.ModTime(),
+		entries:   &cf,
+	})); err != nil {
+		log.Errorf("scan book by path %s error: %s", root, err)
+		return err
 	}
 
-	for _, f := range cf.volumes {
-		volPath := filepath.Join(root, f.Name())
-		vol, err := l.parseVolume(volPath)
-		if err != nil {
-			logger.Errorf("parse vol %s error: %s", volPath, err)
-			continue // parse remaining files
-		}
-
-		if len(vol.Files) == 0 {
-			logger.Debugf("volume file is empty: %s", volPath)
-			continue
-		}
-
-		book.Volumes = append(book.Volumes, *vol)
-	}
-
-	if l.sortVolumes != nil {
-		l.sortVolumes(book.Volumes)
-	}
-
-	// assign sequential volume id here
-	for i := range book.Volumes {
-		book.Volumes[i].ID = i + 1
-	}
-
-	for i := range cf.directories {
-		entry := cf.directories[i]
-		entryPath := filepath.Join(root, entry.Name())
-		if err := l.walkExtra(entryPath, &book); err != nil {
-			return err
-		}
-	}
-
-	if l.sortVolumes != nil {
-		l.sortVolumes(book.Extras)
-	}
-
-	l.handleBook(lib.ID, &book, bookInDatabase)
 	return nil
 }
 

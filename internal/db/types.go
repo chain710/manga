@@ -55,21 +55,17 @@ func (b *Book) SyncBookID() {
 }
 
 type Volume struct {
-	ID        int64          `db:"id" json:"id"`
-	BookID    int64          `db:"book_id" json:"book_id"`
-	BookName  string         `db:"book_name" json:"book_name,omitempty"`
-	Writer    string         `db:"writer" json:"writer,omitempty"`
-	CreateAt  Time           `db:"create_at" json:"create_at"`
-	Path      string         `db:"path" json:"path"`
-	Title     string         `db:"title" json:"title"`
-	Volume    int            `db:"volume" json:"volume"` // 0 = extra
-	PageCount int            `db:"page_count" json:"page_count"`
-	Files     VolumeFileList `db:"files" json:"files"`
+	VolumeTable
+	BookName string          `json:"book_name,omitempty"`
+	Writer   string          `json:"writer,omitempty"`
+	Progress *VolumeProgress `json:"progress,omitempty"`
 }
 
 func (v *Volume) DeepCopy() *Volume {
 	n := *v
 	n.Files = v.Files[:]
+
+	n.Progress = v.Progress.DeepCopy()
 	return &n
 }
 
@@ -107,15 +103,6 @@ func findInVolumes(id int64, files []Volume) (*Volume, error) {
 	return nil, os.ErrNotExist
 }
 
-type VolumeProgress struct {
-	CreateAt Time  `db:"create_at"`
-	UpdateAt Time  `db:"update_at"`
-	BookID   int64 `db:"book_id"`
-	VolumeID int64 `db:"volume_id"`
-	Complete bool  `db:"complete"`
-	Page     int   `db:"page"`
-}
-
 type BookProgress struct {
 	BookID   int64 `db:"book_id" json:"book_id"`
 	UpdateAt Time  `db:"update_at" json:"update_at"`
@@ -130,10 +117,26 @@ type BookProgress struct {
 
 type VolumeThumbnail struct {
 	ID        int64  `db:"id"`
+	Hash      string `db:"hash"`
 	Thumbnail []byte `db:"thumbnail"`
 }
 
 type BookThumbnail struct {
 	ID        int64  `db:"id"`
+	Hash      string `db:"hash"`
 	Thumbnail []byte `db:"thumbnail"`
+}
+
+type VolumeProgress struct {
+	CreateAt Time `json:"create_at"`
+	UpdateAt Time `json:"update_at"`
+	Page     int  `json:"page"`
+}
+
+func (vp *VolumeProgress) DeepCopy() *VolumeProgress {
+	return &VolumeProgress{
+		CreateAt: vp.CreateAt,
+		UpdateAt: vp.UpdateAt,
+		Page:     vp.Page,
+	}
 }

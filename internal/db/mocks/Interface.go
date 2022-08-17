@@ -392,20 +392,6 @@ func (_m *Interface) SetBookThumbnail(ctx context.Context, thumbnail db.BookThum
 	return r0
 }
 
-// SetVolumeProgress provides a mock function with given fields: ctx, opt
-func (_m *Interface) SetVolumeProgress(ctx context.Context, opt db.VolumeProgressOptions) error {
-	ret := _m.Called(ctx, opt)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, db.VolumeProgressOptions) error); ok {
-		r0 = rf(ctx, opt)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
 // SetVolumeThumbnail provides a mock function with given fields: ctx, thumbnail
 func (_m *Interface) SetVolumeThumbnail(ctx context.Context, thumbnail db.VolumeThumbnail) error {
 	ret := _m.Called(ctx, thumbnail)

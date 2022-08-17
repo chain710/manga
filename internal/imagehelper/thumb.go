@@ -1,12 +1,10 @@
 package imagehelper
 
 import (
-	"bytes"
 	"errors"
 	"github.com/chain710/manga/internal/arc"
 	"github.com/chain710/manga/internal/db"
 	"github.com/chain710/manga/internal/log"
-	"github.com/disintegration/imaging"
 	"image"
 	"sort"
 )
@@ -53,7 +51,7 @@ func GetVolumeCover(archive arc.Archive, files []db.VolumeFile, opt VolumeThumbn
 			continue
 		}
 
-		img, err := imaging.Decode(bytes.NewReader(data), imaging.AutoOrientation(true))
+		img, err := DecodeFromBytes(data)
 		if err != nil {
 			logger.Errorf("decode image %s error: %s", file.Path, err)
 			continue

@@ -22,8 +22,6 @@ type Interface interface {
 	GetVolume(ctx context.Context, opt GetVolumeOptions) (*Volume, error)
 	ListVolumes(ctx context.Context, opt ListVolumesOptions) ([]Volume, error)
 	GetVolumeNeighbour(ctx context.Context, opt GetVolumeNeighbourOptions) (*int64, *int64, error)
-	// TODO SetVolumeProgress remove
-	SetVolumeProgress(ctx context.Context, opt VolumeProgressOptions) error
 	BatchUpdateVolumeProgress(ctx context.Context, opt BatchUpdateVolumeProgressOptions) error
 	SetVolumeThumbnail(ctx context.Context, thumbnail VolumeThumbnail) error
 	GetVolumeThumbnail(ctx context.Context, opt GetVolumeThumbOptions) (*VolumeThumbnail, error)
@@ -36,12 +34,16 @@ const (
 	ListBooksRightJoinProgress = "RightJoinProgress"
 	ListBookWithoutThumbnail   = "WithoutThumbnail"
 	ListBooksOnly              = ""
+	// volume join
+	VolumeCompactProgress      = "CompactVolumeProgress"
+	VolumeLeftJoinBookProgress = "LeftJoinBookProgress"
+	VolumeReading              = "VolumeReading"
+	VolumeMustNotHaveThumb     = "VolumeMustNotHaveThumb"
 )
 
 type GetBookOptions struct {
-	ID              int64
-	Path            string
-	WithoutProgress bool
+	ID   int64
+	Path string
 }
 
 type PatchBookOptions struct {
@@ -60,7 +62,8 @@ type ListBooksOptions struct {
 }
 
 type GetVolumeOptions struct {
-	ID int64
+	ID   int64
+	Join string
 }
 
 type GetVolumeNeighbourOptions struct {
@@ -76,13 +79,27 @@ type VolumeProgressOptions struct {
 }
 
 const (
+	UpdateVolumeProgressUpdate   = "Update"
 	UpdateVolumeProgressComplete = "Complete"
 	UpdateVolumeProgressReset    = "Reset"
 )
 
+type SetVolumeProgress struct {
+	VolumeID int64
+	Page     int
+}
+
 type BatchUpdateVolumeProgressOptions struct {
-	IDs     []int64
-	Operate string
+	SetVolumes []SetVolumeProgress
+	Operate    string
+}
+
+func (b BatchUpdateVolumeProgressOptions) IDs() []int64 {
+	ids := make([]int64, len(b.SetVolumes))
+	for i := range b.SetVolumes {
+		ids[i] = b.SetVolumes[i].VolumeID
+	}
+	return ids
 }
 
 type DeleteLibraryOptions struct {
@@ -96,7 +113,8 @@ type PatchLibraryOptions struct {
 }
 
 type ListVolumesOptions struct {
-	WithoutThumbnail bool
+	BookID *int64
+	Join   string
 }
 
 type GetVolumeThumbOptions struct {

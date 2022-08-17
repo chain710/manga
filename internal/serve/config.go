@@ -11,10 +11,12 @@ type Config struct {
 	BaseURI          string
 	DSN              string
 	ArchiveCacheSize int
-	VolumeCacheSize  int
-	ImageCacheSize   int
+	PageCacheSize    int
+	ThumbCacheSize   int
 	PrefetchImages   int
 	PrefetchQueue    int
+	ThumbWidth       int
+	ThumbHeight      int
 }
 
 func (c *Config) Validate() error {
@@ -28,14 +30,17 @@ func (c *Config) Validate() error {
 	if c.ArchiveCacheSize <= 0 {
 		return errors.New("invalid archive cache size")
 	}
-	if c.VolumeCacheSize <= 0 {
-		return errors.New("invalid volume cache size")
-	}
-	if c.ImageCacheSize <= 0 {
+	if c.PageCacheSize <= 0 {
 		return errors.New("invalid image cache size")
+	}
+	if c.ThumbCacheSize <= 0 {
+		return errors.New("invalid thumb cache size")
 	}
 	if c.PrefetchImages > 0 && c.PrefetchQueue <= 0 {
 		return errors.New("invalid prefetch queue")
+	}
+	if c.ThumbWidth < 100 && c.ThumbHeight < 100 {
+		return errors.New("thumb too small")
 	}
 	return nil
 }

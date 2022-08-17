@@ -6,6 +6,7 @@ import (
 	"github.com/chain710/manga/internal/log"
 	"github.com/chain710/manga/internal/scanner"
 	"github.com/chain710/manga/internal/tasks"
+	"github.com/chain710/manga/internal/util"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"os"
@@ -16,6 +17,7 @@ import (
 type toolsCmd struct {
 	db                db.Interface
 	ignoreBookModTime bool
+	forceUpdateThumb  bool
 }
 
 func (t *toolsCmd) setDatabase(_ *cobra.Command, _ []string) error {
@@ -65,7 +67,7 @@ func (t *toolsCmd) scanLibrary(cmd *cobra.Command, args []string) error {
 func (t *toolsCmd) scanThumbnail(cmd *cobra.Command, _ []string) error {
 	cmd.SilenceUsage = true
 	cd := tasks.NewThumbnailScanner(t.db)
-	return cd.Once(cmd.Context())
+	return cd.Once(cmd.Context(), t.forceUpdateThumb)
 }
 
 func (t *toolsCmd) setVolumeThumbnail(cmd *cobra.Command, args []string) error {
@@ -81,7 +83,8 @@ func (t *toolsCmd) setVolumeThumbnail(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := t.db.SetVolumeThumbnail(cmd.Context(), db.VolumeThumbnail{ID: vid, Thumbnail: data}); err != nil {
+	vt := db.VolumeThumbnail{ID: vid, Hash: util.ImageHash(data), Thumbnail: data}
+	if err := t.db.SetVolumeThumbnail(cmd.Context(), vt); err != nil {
 		log.Errorf("set vol thumb error: %s", err)
 		return err
 	}
@@ -111,16 +114,17 @@ func init() {
 		PreRunE: cmd.setDatabase,
 		RunE:    cmd.setVolumeThumbnail,
 	}
-	scanVolThumb := &cobra.Command{
+	scanThumb := &cobra.Command{
 		Use:     "scanthumb",
 		PreRunE: cmd.setDatabase,
 		RunE:    cmd.scanThumbnail,
 	}
+	scanThumb.Flags().BoolVar(&cmd.forceUpdateThumb, "force", false, "force update all thumbs")
 	realCmd := &cobra.Command{
 		Use:   "tools",
 		Short: "tools collection",
 	}
-	realCmd.AddCommand(addLib, scanLib, setVolThumb, scanVolThumb)
+	realCmd.AddCommand(addLib, scanLib, setVolThumb, scanThumb)
 	rootCmd.AddCommand(realCmd)
 	realCmd.PersistentFlags().StringP("dsn", "", "", "data source name, like postgres://localhost:5432/db?sslmode=disable")
 	_ = viper.BindPFlag("dsn", realCmd.Flags().Lookup("dsn"))
