@@ -19,6 +19,12 @@ func WithSerializerWorker(count int) LibraryWatcherOption {
 	}
 }
 
+func WithScanWorker(count int) LibraryWatcherOption {
+	return func(sd *LibraryWatcher) {
+		sd.scanWorkerCount = count
+	}
+}
+
 func WithScannerOptions(options ...scanner.Option) LibraryWatcherOption {
 	return func(sd *LibraryWatcher) {
 		sd.scanOptions = options
@@ -35,8 +41,8 @@ func NewLibraryWatcher(db db.Interface, options ...LibraryWatcherOption) *Librar
 	s := &LibraryWatcher{
 		database:             db,
 		interval:             time.Hour * 24,
-		serializeQueue:       workqueue.NewRetryQueue("scanner.serialize", clk),
 		scanQueue:            workqueue.NewRetryQueue("scanner.scan", clk),
+		serializeQueue:       workqueue.NewRetryQueue("scanner.serialize", clk),
 		serializeWorkerCount: 1,
 		scanWorkerCount:      1,
 	}
@@ -63,6 +69,7 @@ type LibraryWatcher struct {
 }
 
 func (s *LibraryWatcher) Start(ctx context.Context) {
+	log.Infof("start library watcher ...")
 	for i := 0; i < s.serializeWorkerCount; i++ {
 		go s.serialize(ctx, i)
 	}
@@ -72,6 +79,7 @@ func (s *LibraryWatcher) Start(ctx context.Context) {
 	}
 
 	ticker := time.NewTicker(s.interval)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():

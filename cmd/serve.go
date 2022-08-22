@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 type serveCmd struct {
@@ -16,26 +17,32 @@ type serveCmd struct {
 }
 
 const (
-	addr          = "addr"
-	dsn           = "dsn"
-	archiveCache  = "archive_cache"
-	volumeCache   = "volume_cache"
-	imageCache    = "image_cache"
-	prefetchImage = "prefetch_image"
-	prefetchQueue = "prefetch_queue"
+	addr                 = "addr"
+	dsn                  = "dsn"
+	archiveCache         = "archive_cache"
+	volumeCache          = "volume_cache"
+	imageCache           = "image_cache"
+	prefetchImage        = "prefetch_image"
+	prefetchQueue        = "prefetch_queue"
+	watchInterval        = "watch_interval"
+	scanWorkerCount      = "scan_workers"
+	serializeWorkerCount = "serialize_workers"
 )
 
 func (m *serveCmd) RunE(cmd *cobra.Command, _ []string) error {
 	config := serve.Config{
-		Addr:             viper.GetString("addr"),
-		Debug:            m.debug,
-		BaseURI:          m.baseURI,
-		DSN:              viper.GetString("dsn"),
-		ArchiveCacheSize: viper.GetInt(archiveCache),
-		VolumeCacheSize:  viper.GetInt(volumeCache),
-		ImageCacheSize:   viper.GetInt(imageCache),
-		PrefetchImages:   viper.GetInt(prefetchImage),
-		PrefetchQueue:    viper.GetInt(prefetchQueue),
+		Addr:                 viper.GetString("addr"),
+		Debug:                m.debug,
+		BaseURI:              m.baseURI,
+		DSN:                  viper.GetString("dsn"),
+		ArchiveCacheSize:     viper.GetInt(archiveCache),
+		VolumeCacheSize:      viper.GetInt(volumeCache),
+		ImageCacheSize:       viper.GetInt(imageCache),
+		PrefetchImages:       viper.GetInt(prefetchImage),
+		PrefetchQueue:        viper.GetInt(prefetchQueue),
+		WatchInterval:        viper.GetDuration(watchInterval),
+		ScanWorkerCount:      viper.GetInt(scanWorkerCount),
+		SerializeWorkerCount: viper.GetInt(serializeWorkerCount),
 	}
 
 	if err := config.Validate(); err != nil {
@@ -76,5 +83,8 @@ func init() {
 	_ = viperFlag(realCmd.Flags(), imageCache, 100, "image cache size")
 	_ = viperFlag(realCmd.Flags(), prefetchImage, 5, "prefetch image count. 0 means disable")
 	_ = viperFlag(realCmd.Flags(), prefetchQueue, 16, "prefetch queue")
+	_ = viperFlag(realCmd.Flags(), watchInterval, 24*time.Hour, "how often scan books & libraries")
+	_ = viperFlag(realCmd.Flags(), scanWorkerCount, 1, "scan worker count")
+	_ = viperFlag(realCmd.Flags(), serializeWorkerCount, 1, "serialize worker count")
 	rootCmd.AddCommand(realCmd)
 }

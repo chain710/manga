@@ -41,6 +41,7 @@ type handlers struct {
 	volumesCache  *cache.Volumes
 	imagesCache   *cache.Images
 	imagePrefetch *tasks.ImagePrefetch
+	libWatcher    *tasks.LibraryWatcher
 }
 
 func (h *handlers) registerRoutes(router *gin.Engine) {
@@ -50,9 +51,11 @@ func (h *handlers) registerRoutes(router *gin.Engine) {
 	v1.DELETE("/library/:lib", wrapJSONHandler(h.apiDeleteLibrary))
 	v1.PATCH("/library/:lib", wrapJSONHandler(h.apiPatchLibrary))
 	v1.GET("/library/:lib", wrapJSONHandler(h.apiGetLibrary))
+	v1.GET("/library/:lib/scan", wrapJSONHandler(h.apiScanLibrary))
 	v1.GET("/book", wrapJSONHandler(h.apiListBooks))
 	v1.PATCH("/book/:bid", wrapJSONHandler(h.apiPatchBook))
 	v1.GET("/book/:bid", wrapJSONHandler(h.apiGetBook))
+	v1.GET("/book/:bid/scan", wrapJSONHandler(h.apiScanBook))
 	v1.GET("/book/:bid/thumb", wrapImageHandler(h.apiGetBookThumbnail))
 	v1.GET("/volume/:vid", wrapJSONHandler(h.apiGetVolume))
 	v1.GET("/volume/:vid/thumb", wrapImageHandler(h.apiGetVolumeThumbnail))
@@ -151,6 +154,35 @@ func (h *handlers) apiGetLibrary(ctx *gin.Context) (interface{}, error) {
 	}
 
 	return lib, nil
+}
+
+func (h *handlers) apiScanLibrary(ctx *gin.Context) (interface{}, error) {
+	if nil == h.libWatcher {
+		return nil, errScanDisabled
+	}
+
+	var uriParams struct {
+		ID int64 `uri:"lib"`
+	}
+
+	if err := ctx.ShouldBindUri(&uriParams); err != nil {
+		log.Debugf("bind uri error: %s", err)
+		return nil, err
+	}
+
+	lib, err := h.database.GetLibrary(ctx, uriParams.ID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			err = errNotFound
+		} else {
+			log.Errorf("get library %d error: %s", uriParams.ID, err)
+		}
+		return nil, err
+	}
+
+	log.Infof("add scan lib %d task", uriParams.ID)
+	_ = h.libWatcher.AddLibrary(*lib)
+	return nil, nil
 }
 
 func (h *handlers) apiListBooks(ctx *gin.Context) (interface{}, error) {
@@ -275,6 +307,34 @@ func (h *handlers) apiGetBook(ctx *gin.Context) (interface{}, error) {
 		return nil, errNotFound
 	}
 	return book, nil
+}
+
+func (h *handlers) apiScanBook(ctx *gin.Context) (interface{}, error) {
+	if nil == h.libWatcher {
+		return nil, errScanDisabled
+	}
+	var uriParam struct {
+		ID int64 `uri:"bid"`
+	}
+	if err := ctx.ShouldBindUri(&uriParam); err != nil {
+		log.Debugf("bind uri error: %s", err)
+		return nil, errInvalidRequest
+	}
+
+	logger := log.With("book_id", uriParam.ID)
+	book, err := h.database.GetBook(ctx, db.GetBookOptions{ID: uriParam.ID, WithoutProgress: true})
+	if err != nil {
+		logger.Errorf("get book error: %s", err)
+		return nil, err
+	}
+	if book == nil {
+		logger.Debugf("book not found")
+		return nil, errNotFound
+	}
+
+	logger.Infof("add scan book %d task", uriParam.ID)
+	_ = h.libWatcher.AddBook(*book)
+	return nil, nil
 }
 
 func (h *handlers) apiGetBookThumbnail(ctx *gin.Context) (*types.Image, error) {

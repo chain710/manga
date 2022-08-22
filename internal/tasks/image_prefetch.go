@@ -39,6 +39,7 @@ type ImagePrefetch struct {
 }
 
 func (i *ImagePrefetch) Start(ctx context.Context) {
+	log.Infof("start image prefetch...")
 	go i.workLoop()
 
 	<-ctx.Done()
