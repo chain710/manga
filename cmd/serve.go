@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 type serveCmd struct {
@@ -16,30 +17,36 @@ type serveCmd struct {
 }
 
 const (
-	addr          = "addr"
-	dsn           = "dsn"
-	archiveCache  = "archive_cache"
-	pageCache     = "page_cache"
-	thumbCache    = "thumb_cache"
-	prefetchImage = "prefetch_image"
-	prefetchQueue = "prefetch_queue"
-	thumbWidth    = "thumb_width"
-	thumbHeight   = "thumb_height"
+	addr                 = "addr"
+	dsn                  = "dsn"
+	archiveCache         = "archive_cache"
+	pageCache            = "page_cache"
+	thumbCache           = "thumb_cache"
+	prefetchImage        = "prefetch_image"
+	prefetchQueue        = "prefetch_queue"
+	thumbWidth           = "thumb_width"
+	thumbHeight          = "thumb_height"
+	watchInterval        = "watch_interval"
+	scanWorkerCount      = "scan_workers"
+	serializeWorkerCount = "serialize_workers"
 )
 
 func (m *serveCmd) RunE(cmd *cobra.Command, _ []string) error {
 	config := serve.Config{
-		Addr:             viper.GetString("addr"),
-		Debug:            m.debug,
-		BaseURI:          m.baseURI,
-		DSN:              viper.GetString("dsn"),
-		ArchiveCacheSize: viper.GetInt(archiveCache),
-		PageCacheSize:    viper.GetInt(pageCache),
-		ThumbCacheSize:   viper.GetInt(thumbCache),
-		PrefetchImages:   viper.GetInt(prefetchImage),
-		PrefetchQueue:    viper.GetInt(prefetchQueue),
-		ThumbWidth:       viper.GetInt(thumbWidth),
-		ThumbHeight:      viper.GetInt(thumbHeight),
+		Addr:                 viper.GetString("addr"),
+		Debug:                m.debug,
+		BaseURI:              m.baseURI,
+		DSN:                  viper.GetString("dsn"),
+		ArchiveCacheSize:     viper.GetInt(archiveCache),
+		PageCacheSize:        viper.GetInt(pageCache),
+		ThumbCacheSize:       viper.GetInt(thumbCache),
+		PrefetchImages:       viper.GetInt(prefetchImage),
+		PrefetchQueue:        viper.GetInt(prefetchQueue),
+		ThumbWidth:           viper.GetInt(thumbWidth),
+		ThumbHeight:          viper.GetInt(thumbHeight),
+		WatchInterval:        viper.GetDuration(watchInterval),
+		ScanWorkerCount:      viper.GetInt(scanWorkerCount),
+		SerializeWorkerCount: viper.GetInt(serializeWorkerCount),
 	}
 
 	if err := config.Validate(); err != nil {
@@ -82,5 +89,8 @@ func init() {
 	_ = viperFlag(realCmd.Flags(), prefetchQueue, 16, "prefetch queue")
 	_ = viperFlag(realCmd.Flags(), thumbWidth, 210, "prefetch queue")
 	_ = viperFlag(realCmd.Flags(), thumbHeight, 297, "prefetch queue")
+	_ = viperFlag(realCmd.Flags(), watchInterval, 24*time.Hour, "how often scan books & libraries")
+	_ = viperFlag(realCmd.Flags(), scanWorkerCount, 1, "scan worker count")
+	_ = viperFlag(realCmd.Flags(), serializeWorkerCount, 1, "serialize worker count")
 	rootCmd.AddCommand(realCmd)
 }

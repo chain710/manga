@@ -14,6 +14,38 @@ import (
 	"time"
 )
 
+func startImagePrefetch(ctx context.Context, cfg Config,
+	imagesCache *cache.Images,
+	archiveCache *arc.ArchiveCache) *tasks.ImagePrefetch {
+	var imagePrefetch *tasks.ImagePrefetch
+	if cfg.PrefetchImages > 0 {
+		log.Debugf("enable image prefetch, count=%d queue=%d",
+			cfg.PrefetchImages, cfg.PrefetchQueue)
+		imagePrefetch = tasks.NewImagePrefetch(imagesCache, archiveCache, cfg.PrefetchQueue)
+		go imagePrefetch.Start(ctx)
+	}
+
+	return imagePrefetch
+}
+
+func startLibraryWatcher(ctx context.Context, cfg Config, database db.Interface) *tasks.LibraryWatcher {
+	var libWatcher *tasks.LibraryWatcher
+	if cfg.WatchInterval > 0 {
+		libWatcher = tasks.NewLibraryWatcher(database,
+			tasks.WithWatchInterval(cfg.WatchInterval),
+			tasks.WithScanWorker(cfg.ScanWorkerCount),
+			tasks.WithSerializerWorker(cfg.SerializeWorkerCount))
+		go libWatcher.Start(ctx)
+	}
+	return libWatcher
+}
+
+func startThumbScanner(ctx context.Context, database db.Interface, archiveCache *arc.ArchiveCache) *tasks.ThumbnailScanner {
+	s := tasks.NewThumbnailScanner(database, tasks.ThumbWithArchiveCache(archiveCache))
+	go s.Start(ctx)
+	return s
+}
+
 func Start(ctx context.Context, cfg Config) {
 	if cfg.Debug {
 		gin.SetMode(gin.DebugMode)
@@ -35,13 +67,9 @@ func Start(ctx context.Context, cfg Config) {
 	log.Debugf("create page cache %d", cfg.PageCacheSize)
 	thumbCache := cache.NewImages(cfg.ThumbCacheSize)
 	log.Debugf("create thumb cache %d", cfg.ThumbCacheSize)
-	var imagePrefetch *tasks.ImagePrefetch
-	if cfg.PrefetchImages > 0 {
-		log.Debugf("enable image prefetch, count=%d queue=%d",
-			cfg.PrefetchImages, cfg.PrefetchQueue)
-		imagePrefetch = tasks.NewImagePrefetch(pageCache, archiveCache, cfg.PrefetchQueue)
-		go imagePrefetch.Start(ctx)
-	}
+	imagePrefetch := startImagePrefetch(ctx, cfg, pageCache, archiveCache)
+	libWatcher := startLibraryWatcher(ctx, cfg, database)
+	startThumbScanner(ctx, database, archiveCache)
 
 	h := handlers{
 		config:          cfg,
@@ -50,6 +78,7 @@ func Start(ctx context.Context, cfg Config) {
 		volumePageCache: pageCache,
 		thumbCache:      thumbCache,
 		imagePrefetch:   imagePrefetch,
+		libWatcher:      libWatcher,
 	}
 	h.registerRoutes(router)
 

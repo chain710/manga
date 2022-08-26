@@ -16,6 +16,12 @@ import (
 
 type ThumbnailOption func(*ThumbnailScanner)
 
+func ThumbWithArchiveCache(archiveCache *arc.ArchiveCache) ThumbnailOption {
+	return func(scanner *ThumbnailScanner) {
+		scanner.archiveCache = archiveCache
+	}
+}
+
 func NewThumbnailScanner(db db.Interface, options ...ThumbnailOption) *ThumbnailScanner {
 	d := &ThumbnailScanner{
 		database: db,
@@ -27,6 +33,7 @@ func NewThumbnailScanner(db db.Interface, options ...ThumbnailOption) *Thumbnail
 		},
 		thumbWidth:  210,
 		thumbHeight: 297,
+		interval:    time.Minute * 10,
 	}
 	for _, apply := range options {
 		apply(d)
@@ -76,6 +83,7 @@ func (i thumbOfBook) Index() interface{} {
 func (d *ThumbnailScanner) Start(ctx context.Context) {
 	go d.workloop(ctx)
 	ticker := clk.NewTicker(d.interval)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():

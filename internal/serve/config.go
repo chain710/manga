@@ -3,20 +3,24 @@ package serve
 import (
 	"errors"
 	"strings"
+	"time"
 )
 
 type Config struct {
-	Addr             string
-	Debug            bool
-	BaseURI          string
-	DSN              string
-	ArchiveCacheSize int
-	PageCacheSize    int
-	ThumbCacheSize   int
-	PrefetchImages   int
-	PrefetchQueue    int
-	ThumbWidth       int
-	ThumbHeight      int
+	Addr                 string
+	Debug                bool
+	BaseURI              string
+	DSN                  string
+	ArchiveCacheSize     int
+	PageCacheSize        int
+	ThumbCacheSize       int
+	PrefetchImages       int
+	PrefetchQueue        int
+	ThumbWidth           int
+	ThumbHeight          int
+	WatchInterval        time.Duration
+	ScanWorkerCount      int
+	SerializeWorkerCount int
 }
 
 func (c *Config) Validate() error {
@@ -39,8 +43,17 @@ func (c *Config) Validate() error {
 	if c.PrefetchImages > 0 && c.PrefetchQueue <= 0 {
 		return errors.New("invalid prefetch queue")
 	}
+
 	if c.ThumbWidth < 100 && c.ThumbHeight < 100 {
 		return errors.New("thumb too small")
+	}
+	if c.WatchInterval > 0 {
+		if c.ScanWorkerCount <= 0 {
+			return errors.New("invalid scan worker count")
+		}
+		if c.SerializeWorkerCount <= 0 {
+			return errors.New("invalid serialize worker count")
+		}
 	}
 	return nil
 }

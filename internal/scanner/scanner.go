@@ -334,6 +334,7 @@ func (l *Type) walkDir(ctx context.Context, lib *db.Library, root string,
 		return l.handleDirs(ctx, lib, root, cf.directories, knownBooks)
 	}
 
+	// TODO: without progress?
 	bookInDatabase, err := l.db.GetBook(ctx, db.GetBookOptions{Path: root})
 	if err != nil {
 		log.Errorf("get exist book by path %s error: %s", root, err)
