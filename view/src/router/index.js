@@ -2,27 +2,42 @@ import Vue from "vue";
 import VueRouter from "vue-router";
 import HomeView from "@/views/HomeView.vue";
 import HomeDashboard from "@/views/HomeDashboard.vue";
-
 Vue.use(VueRouter);
 
 const routes = [
-  { path: "*", redirect: "/" },
+  { path: "*", redirect: { name: "dashboard" } },
   {
+    name: "home",
     path: "/",
     component: HomeView,
+    redirect: { name: "dashboard" },
     children: [
-      { name: "home", path: "", component: HomeDashboard },
+      { name: "dashboard", path: "dashboard", component: HomeDashboard },
       {
-        path: "book/:bid(\\d+)",
-        component: () => import("../views/BookView.vue"),
+        name: "libraries",
+        path: "libraries/:libraryID",
+        component: () => import("../views/HomeLibraries.vue"),
+        props: true,
+      },
+      {
+        name: "book",
+        path: "book/:bookID(\\d+)",
+        component: () => import("../views/HomeBook.vue"),
+        props: true,
       },
     ],
   },
   {
-    // TODO: page params
-    path: "/book/:bid(\\d+)/vol/:vid",
-    name: "image",
-    component: () => import("../views/BookReader.vue"),
+    path: "/read/:volumeID(\\d+)",
+    name: "read",
+    component: () => import("../views/ReaderView.vue"),
+    props: true,
+  },
+  {
+    path: "/play",
+    name: "play",
+    component: () => import("../views/MyPlay.vue"),
+    props: true,
   },
 ];
 

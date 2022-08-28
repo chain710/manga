@@ -1,5 +1,11 @@
 # view
 
+## TODO
+
+- open volume recover progress
+- ReaderView: show click zone
+- ReaderView: more read mode(left to right, right to left)
+
 ## Project setup
 ```
 npm install

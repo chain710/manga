@@ -1,0 +1,113 @@
+{
+  "dashboard": {
+    "recent_read": "继续阅读",
+    "latest": "最近更新"
+  },
+  "drawer": {
+    "dashboard": "首页",
+    "libraries": "库"
+  },
+  "library": {
+    "fab": {
+      "edit": "修改库",
+      "scan": "扫描库文件",
+      "delete": "删除库"
+    },
+    "all": "所有库",
+    "empty": "无任何内容"
+  },
+  "global": {
+    "close": "关闭",
+    "go_to_library": "前往库",
+    "total_volumes": "共{count}卷",
+    "volume_at": "第{num}卷 共{page}页",
+    "extra_at": "共{page}页",
+    "reading_volume": "在读{num}卷第{page}页",
+    "reading_extra": "在读第{page}页",
+    "writer": "作者: {writer}",
+    "cancel": "取消",
+    "confirm": "确认",
+    "extras": "其他内容"
+  },
+  "book": {
+    "fab": {
+      "edit": "修改书信息"
+    },
+    "scan": "扫描",
+    "edit": "修改元信息",
+    "mark_unread": "标记未阅读",
+    "mark_read": "标记已阅读"
+  },
+  "read": {
+    "beginning_of_book": "你可以开始阅读这本书",
+    "end_of_book": "你已经阅读完这本书了",
+    "move_next": "再次单击或按“下一步”移动到下一本书。",
+    "move_next_exit": "再次单击或按“下一步”退出阅读",
+    "move_previous": "再次单击或按“上一页”可移动到上一本书",
+    "prev_volume": "前卷",
+    "next_volume": "后卷",
+    "set_book_thumb": "设置为本书封面",
+    "set_volume_thumb": "设置为本卷封面",
+    "settings": {
+      "title": "阅读设置",
+      "display": "显示",
+      "paged": "页面",
+      "background_color": "背景颜色",
+      "background_color_white": "白色",
+      "background_color_gray": "灰色",
+      "background_color_black": "黑色",
+      "reading_mode": "阅读模式",
+      "read_mode_rtl": "从右到左",
+      "read_mode_ltr": "从左到右"
+    }
+  },
+  "message": {
+    "error": {
+      "set_thumb": "设置封面错误: {err}",
+      "list_library": "获取库错误: {err}",
+      "list_book": "获取书籍错误：{err}",
+      "list_directory": "获取服务器目录错误：{err}",
+      "add_library": "添加库失败：{err}",
+      "patch_library": "修改库失败：{err}",
+      "delete_library": "删除库失败：{err}",
+      "scan_library": "扫描库失败：{err}",
+      "get_book": "获取本书错误: {err}",
+      "list_volume": "获取卷错误：{err}"
+    },
+    "info": {
+      "set_volume_thumb": "设置卷封面成功",
+      "set_book_thumb": "设置书封面成功",
+      "add_library": "添加库成功",
+      "delete_library": "删除库成功",
+      "patch_library": "修改库成功",
+      "scan_library": "扫描库正在运行中"
+    }
+  },
+  "dialog": {
+    "file_browser": {
+      "title": "库的根目录",
+      "confirm": "选择",
+      "cancel": "取消",
+      "parent_directory": "/"
+    },
+    "edit_library": {
+      "add_title": "添加库",
+      "edit_title": "编辑库",
+      "field_name": "名称",
+      "button_browse": "浏览",
+      "button_add": "添加",
+      "button_cancel": "取消",
+      "button_edit": "修改",
+      "tab_general": "常规",
+      "path": "库根目录"
+    },
+    "delete_library": {
+      "title": "删除库{name}吗？",
+      "body": "请确认库根目录：{path}，磁盘文件不会被删除"
+    }
+  },
+  "validations": {
+    "required": "必须填写",
+    "maxLength": "最大长度{max}"
+  }
+}

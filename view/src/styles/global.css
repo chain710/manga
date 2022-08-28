@@ -1,4 +1,23 @@
 /*https://vuetifyjs.com/en/getting-started/frequently-asked-questions/#questions*/
 html {
-    overflow-y: auto !important;
+  overflow-y: auto !important;
+}
+
+.link-underline {
+  text-decoration: none;
+}
+
+.link-underline:hover {
+  text-decoration: underline;
+}
+
+.sticky-bar {
+  position: -webkit-sticky !important;
+  position: sticky !important;
+  z-index: 2;
+  top: 64px;
+}
+
+.fill-width {
+  width: 100%;
 }
