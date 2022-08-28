@@ -113,6 +113,7 @@ func TestType_Scan(t *testing.T) {
 
 		bi := item.(*BookItem)
 		actualBook[bi.Book.Path] = newTestBook(bi)
+		q.Done(item, nil)
 	}
 
 	require.Equal(t, expectBook, actualBook)

@@ -47,13 +47,14 @@ func (c *Config) Validate() error {
 	if c.ThumbWidth < 100 && c.ThumbHeight < 100 {
 		return errors.New("thumb too small")
 	}
-	if c.WatchInterval > 0 {
-		if c.ScanWorkerCount <= 0 {
-			return errors.New("invalid scan worker count")
-		}
-		if c.SerializeWorkerCount <= 0 {
-			return errors.New("invalid serialize worker count")
-		}
+	if c.WatchInterval <= 0 {
+		return errors.New("invalid watch interval")
+	}
+	if c.ScanWorkerCount <= 0 {
+		return errors.New("invalid scan worker count")
+	}
+	if c.SerializeWorkerCount <= 0 {
+		return errors.New("invalid serialize worker count")
 	}
 	return nil
 }

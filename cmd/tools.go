@@ -59,8 +59,11 @@ func (t *toolsCmd) scanLibrary(cmd *cobra.Command, args []string) error {
 	}
 
 	cmd.SilenceUsage = true
-	watcher := tasks.NewLibraryWatcher(t.db,
+	watcher, err := tasks.NewLibraryWatcher(t.db, nil,
 		tasks.WithScannerOptions(scanner.IgnoreBookModTime(t.ignoreBookModTime)))
+	if err != nil {
+		return err
+	}
 	return watcher.Once(cmd.Context(), int64(id))
 }
 

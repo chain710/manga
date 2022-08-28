@@ -82,7 +82,7 @@ func init() {
 	realCmd.Flags().StringVarP(&cmd.baseURI, "base_uri", "", "", "http base uri")
 	_ = viperFlag(realCmd.Flags(), addr, ":8080", "http serve addr")
 	_ = viperFlag(realCmd.Flags(), dsn, "", "data source name, like postgres://localhost:5432/db?sslmode=disable")
-	_ = viperFlag(realCmd.Flags(), archiveCache, 100, "archive cache size")
+	_ = viperFlag(realCmd.Flags(), archiveCache, 5, "archive cache size")
 	_ = viperFlag(realCmd.Flags(), pageCache, 100, "page cache size")
 	_ = viperFlag(realCmd.Flags(), thumbCache, 100, "thumb cache size")
 	_ = viperFlag(realCmd.Flags(), prefetchImage, 5, "prefetch image count. 0 means disable")

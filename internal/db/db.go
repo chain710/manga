@@ -39,11 +39,14 @@ const (
 	VolumeLeftJoinBookProgress = "LeftJoinBookProgress"
 	VolumeReading              = "VolumeReading"
 	VolumeMustNotHaveThumb     = "VolumeMustNotHaveThumb"
+
+	GetBookJoinVolumeProgress = "JoinVolumeProgress"
 )
 
 type GetBookOptions struct {
 	ID   int64
 	Path string
+	Join string
 }
 
 type PatchBookOptions struct {
@@ -67,8 +70,9 @@ type GetVolumeOptions struct {
 }
 
 type GetVolumeNeighbourOptions struct {
-	BookID int64
-	Volume int
+	BookID   int64
+	Volume   int
+	VolumeID int64
 }
 
 type VolumeProgressOptions struct {
@@ -113,8 +117,10 @@ type PatchLibraryOptions struct {
 }
 
 type ListVolumesOptions struct {
-	BookID *int64
-	Join   string
+	BookID    *int64
+	LibraryID *int64
+	Join      string
+	Limit     int
 }
 
 type GetVolumeThumbOptions struct {

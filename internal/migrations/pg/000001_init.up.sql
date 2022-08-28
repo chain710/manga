@@ -40,7 +40,6 @@ CREATE TABLE IF NOT EXISTS "volumes" (
   "page_count" int NOT NULL, /* how many pages(files) */
   "files" TEXT NOT NULL, /* files in archive, should be sorted */
   PRIMARY KEY ("id"),
-  CONSTRAINT book_volumes_bid_vol_unique UNIQUE ("book_id", "volume"),
   CONSTRAINT book_volumes_path_unique UNIQUE ("path") /* for now, path should be unique */
 );
 
@@ -49,7 +48,7 @@ CREATE INDEX IF NOT EXISTS "volumes_book_id_index" ON "volumes" ("book_id");
 CREATE TABLE IF NOT EXISTS "volume_progress" (
     "create_at" TIMESTAMP WITH TIME ZONE NOT NULL,
     "update_at" TIMESTAMP WITH TIME ZONE NOT NULL,
-    "book_id" INT NOT NULL REFERENCES "books" ("id"),
+    "book_id" INT NOT NULL REFERENCES "books" ("id") ON DELETE CASCADE,
     "volume_id" INT NOT NULL REFERENCES "volumes" ("id") ON DELETE CASCADE,
     "complete" BOOLEAN NOT NULL, /* for filtering */
     "page" INT NOT NULL,

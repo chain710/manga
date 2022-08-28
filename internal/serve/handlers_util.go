@@ -129,7 +129,7 @@ func (h *handlers) cropAsFitThumb(vol *db.Volume, page int, rect image.Rectangle
 	return &types.Image{
 		Data:   out.Bytes(),
 		Hash:   util.ImageHash(out.Bytes()),
-		Format: "jpeg", // TODO use const
+		Format: imageFormatJPEG,
 		H:      size.Dy(),
 		W:      size.Dx(),
 	}, nil

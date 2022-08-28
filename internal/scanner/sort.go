@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"github.com/chain710/manga/internal/arc"
+	"github.com/chain710/manga/internal/log"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -68,9 +69,11 @@ func extractArchiveFileDigits(files []arc.File) digitsExtractor {
 		for j, d := range dlist {
 			val, err := strconv.Atoi(d)
 			if err != nil {
-				panic(err) // should not happen
+				log.Errorf("invalid digit of file in archive: %s, error: %s", p, err)
+				digits[j] = 0
+			} else {
+				digits[j] = val
 			}
-			digits[j] = val
 		}
 		cache[p] = digits
 		return digits, p

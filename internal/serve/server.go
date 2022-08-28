@@ -28,20 +28,26 @@ func startImagePrefetch(ctx context.Context, cfg Config,
 	return imagePrefetch
 }
 
-func startLibraryWatcher(ctx context.Context, cfg Config, database db.Interface) *tasks.LibraryWatcher {
+func startLibraryWatcher(ctx context.Context, cfg Config, database db.Interface, ts *tasks.ThumbnailScanner) *tasks.LibraryWatcher {
 	var libWatcher *tasks.LibraryWatcher
+	var err error
 	if cfg.WatchInterval > 0 {
-		libWatcher = tasks.NewLibraryWatcher(database,
+		libWatcher, err = tasks.NewLibraryWatcher(database, ts,
 			tasks.WithWatchInterval(cfg.WatchInterval),
 			tasks.WithScanWorker(cfg.ScanWorkerCount),
 			tasks.WithSerializerWorker(cfg.SerializeWorkerCount))
+		if err != nil {
+			log.Panicf("new library watcher error: %s", err)
+		}
 		go libWatcher.Start(ctx)
 	}
 	return libWatcher
 }
 
-func startThumbScanner(ctx context.Context, database db.Interface, archiveCache *arc.ArchiveCache) *tasks.ThumbnailScanner {
-	s := tasks.NewThumbnailScanner(database, tasks.ThumbWithArchiveCache(archiveCache))
+func startThumbScanner(ctx context.Context, database db.Interface, cfg Config, archiveCache *arc.ArchiveCache) *tasks.ThumbnailScanner {
+	log.Infof("start thumb scanner")
+	s := tasks.NewThumbnailScanner(database, tasks.ThumbWithArchiveCache(archiveCache),
+		tasks.ThumbWithSize(cfg.ThumbWidth, cfg.ThumbHeight))
 	go s.Start(ctx)
 	return s
 }
@@ -64,12 +70,12 @@ func Start(ctx context.Context, cfg Config) {
 		gingzip.Gzip(gingzip.DefaultCompression))
 	archiveCache := arc.NewArchiveCache(cfg.ArchiveCacheSize)
 	pageCache := cache.NewImages(cfg.PageCacheSize)
-	log.Debugf("create page cache %d", cfg.PageCacheSize)
 	thumbCache := cache.NewImages(cfg.ThumbCacheSize)
-	log.Debugf("create thumb cache %d", cfg.ThumbCacheSize)
+	log.Debugf("archive cache=%d, page cache=%d, thumb cache=%d",
+		cfg.ArchiveCacheSize, cfg.PageCacheSize, cfg.ThumbCacheSize)
 	imagePrefetch := startImagePrefetch(ctx, cfg, pageCache, archiveCache)
-	libWatcher := startLibraryWatcher(ctx, cfg, database)
-	startThumbScanner(ctx, database, archiveCache)
+	thumbScanner := startThumbScanner(ctx, database, cfg, archiveCache)
+	libWatcher := startLibraryWatcher(ctx, cfg, database, thumbScanner)
 
 	h := handlers{
 		config:          cfg,
@@ -79,6 +85,7 @@ func Start(ctx context.Context, cfg Config) {
 		thumbCache:      thumbCache,
 		imagePrefetch:   imagePrefetch,
 		libWatcher:      libWatcher,
+		thumbScanner:    thumbScanner,
 	}
 	h.registerRoutes(router)
 

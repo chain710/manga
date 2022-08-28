@@ -44,6 +44,7 @@ type handlers struct {
 	thumbCache      *cache.Images
 	imagePrefetch   *tasks.ImagePrefetch
 	libWatcher      *tasks.LibraryWatcher
+	thumbScanner    *tasks.ThumbnailScanner
 }
 
 func (h *handlers) registerRoutes(router *gin.Engine) {
@@ -60,6 +61,7 @@ func (h *handlers) registerRoutes(router *gin.Engine) {
 	v1.GET("/book/:bid/thumb", wrapImageHandler(h.apiGetBookThumbnail, h.thumbCache))
 	v1.POST("/book/:bid/thumb", wrapJSONHandler(h.apiSetBookThumbnail))
 	v1.GET("/book/:bid/scan", wrapJSONHandler(h.apiScanBook))
+	v1.GET("/volume", wrapJSONHandler(h.apiListVolume))
 	v1.GET("/volume/:vid", wrapJSONHandler(h.apiGetVolume))
 	// NOTE get/set thumb url path must be exact same to make sure evict thumb cache work
 	v1.GET("/volume/:vid/thumb", wrapImageHandler(h.apiGetVolumeThumbnail, h.thumbCache))
@@ -92,6 +94,7 @@ func (h *handlers) apiAddLibrary(ctx *gin.Context) (interface{}, error) {
 	}
 
 	log.Infof("library %d created: %s", lib.ID, lib.Path)
+	_ = h.libWatcher.AddLibrary(lib)
 	return lib, nil
 }
 
@@ -164,10 +167,6 @@ func (h *handlers) apiGetLibrary(ctx *gin.Context) (interface{}, error) {
 }
 
 func (h *handlers) apiScanLibrary(ctx *gin.Context) (interface{}, error) {
-	if nil == h.libWatcher {
-		return nil, errScanDisabled
-	}
-
 	var uriParams struct {
 		ID int64 `uri:"lib"`
 	}
@@ -187,8 +186,26 @@ func (h *handlers) apiScanLibrary(ctx *gin.Context) (interface{}, error) {
 		return nil, err
 	}
 
-	log.Infof("add scan lib %d task", uriParams.ID)
-	_ = h.libWatcher.AddLibrary(*lib)
+	if nil != h.libWatcher {
+		log.Infof("add scan book %d task", uriParams.ID)
+		_ = h.libWatcher.AddLibrary(*lib)
+	}
+
+	if nil != h.thumbScanner {
+		// list volume without thumb
+		vols, err := h.database.ListVolumes(ctx, db.ListVolumesOptions{LibraryID: &uriParams.ID, Join: db.VolumeMustNotHaveThumb})
+		if err != nil {
+			log.Errorf("get volumes of lib %d error: %s", uriParams.ID, err)
+		} else {
+			h.thumbScanner.ScanVolumes(vols...)
+		}
+		books, _, err := h.database.ListBooks(ctx, db.ListBooksOptions{LibraryID: &uriParams.ID, Join: db.ListBookWithoutThumbnail})
+		if err != nil {
+			log.Errorf("list books of lib %d error: %s", uriParams.ID, err)
+		} else {
+			h.thumbScanner.ScanBook(books...)
+		}
+	}
 	return nil, nil
 }
 
@@ -267,6 +284,39 @@ func (h *handlers) apiPatchBook(ctx *gin.Context) (interface{}, error) {
 	}
 }
 
+const (
+	volumeFilterReading = "reading"
+)
+
+func (h *handlers) apiListVolume(ctx *gin.Context) (interface{}, error) {
+	queryParams := struct {
+		Filter string `form:"filter"`
+		Limit  int    `form:"limit"`
+	}{}
+
+	if err := ctx.ShouldBindQuery(&queryParams); err != nil {
+		log.Debugf("bind query error: %s", err)
+		return nil, errInvalidRequest
+	}
+
+	if queryParams.Filter != volumeFilterReading {
+		log.Debugf("invalid request")
+		return nil, errInvalidRequest
+	}
+
+	opt := db.ListVolumesOptions{Limit: queryParams.Limit}
+	switch queryParams.Filter {
+	case volumeFilterReading:
+		opt.Join = db.VolumeReading
+	}
+	volumes, err := h.database.ListVolumes(ctx, opt)
+	if err != nil {
+		log.Errorf("list volumes error: %s", err)
+		return nil, err
+	}
+	return volumes, nil
+}
+
 func (h *handlers) apiGetVolume(ctx *gin.Context) (interface{}, error) {
 	var uriParam struct {
 		VolumeID int64 `uri:"vid"`
@@ -284,7 +334,8 @@ func (h *handlers) apiGetVolume(ctx *gin.Context) (interface{}, error) {
 		return nil, err
 	}
 
-	prev, next, err := h.database.GetVolumeNeighbour(ctx, db.GetVolumeNeighbourOptions{BookID: vol.BookID, Volume: vol.Volume})
+	opt := db.GetVolumeNeighbourOptions{BookID: vol.BookID, Volume: vol.Volume, VolumeID: uriParam.VolumeID}
+	prev, next, err := h.database.GetVolumeNeighbour(ctx, opt)
 	if err != nil {
 		logger.Errorf("get volume neighbour error: %s", err)
 		return nil, err
@@ -303,7 +354,7 @@ func (h *handlers) apiGetBook(ctx *gin.Context) (interface{}, error) {
 	}
 
 	logger := log.With("book", uriParam.BookID)
-	book, err := h.database.GetBook(ctx, db.GetBookOptions{ID: uriParam.BookID})
+	book, err := h.database.GetBook(ctx, db.GetBookOptions{ID: uriParam.BookID, Join: db.GetBookJoinVolumeProgress})
 	if err != nil {
 		logger.Errorf("get book error: %s", err)
 		return nil, err
@@ -317,9 +368,6 @@ func (h *handlers) apiGetBook(ctx *gin.Context) (interface{}, error) {
 }
 
 func (h *handlers) apiScanBook(ctx *gin.Context) (interface{}, error) {
-	if nil == h.libWatcher {
-		return nil, errScanDisabled
-	}
 	var uriParam struct {
 		ID int64 `uri:"bid"`
 	}
@@ -329,7 +377,6 @@ func (h *handlers) apiScanBook(ctx *gin.Context) (interface{}, error) {
 	}
 
 	logger := log.With("book_id", uriParam.ID)
-	// TODO: should not join progress?
 	book, err := h.database.GetBook(ctx, db.GetBookOptions{ID: uriParam.ID})
 	if err != nil {
 		logger.Errorf("get book error: %s", err)
@@ -340,8 +387,28 @@ func (h *handlers) apiScanBook(ctx *gin.Context) (interface{}, error) {
 		return nil, errNotFound
 	}
 
-	logger.Infof("add scan book %d task", uriParam.ID)
-	_ = h.libWatcher.AddBook(*book)
+	if nil != h.libWatcher {
+		logger.Infof("add scan book %d task", uriParam.ID)
+		_ = h.libWatcher.AddBook(*book)
+	}
+
+	if nil != h.thumbScanner {
+		// list volume without thumb
+		vols, err := h.database.ListVolumes(ctx, db.ListVolumesOptions{BookID: &uriParam.ID, Join: db.VolumeMustNotHaveThumb})
+		if err != nil {
+			logger.Errorf("get volumes of book error: %s", err)
+		} else {
+			h.thumbScanner.ScanVolumes(vols...)
+		}
+
+		thumb, err := h.database.GetBookThumbnail(ctx, uriParam.ID)
+		if err != nil {
+			logger.Errorf("get book thumb error: %s", err)
+		} else if thumb == nil {
+			h.thumbScanner.ScanBook(*book)
+		}
+	}
+
 	return nil, nil
 }
 
@@ -578,7 +645,7 @@ func (h *handlers) apiGetPageThumbnail(ctx *gin.Context) (*types.Image, error) {
 	return &types.Image{
 		Data:   buf.Bytes(),
 		Hash:   util.ImageHash(buf.Bytes()),
-		Format: "jpeg",
+		Format: imageFormatJPEG,
 		H:      height,
 		W:      width,
 	}, nil

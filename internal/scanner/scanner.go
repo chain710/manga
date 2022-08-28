@@ -244,7 +244,8 @@ func (l *Type) ScanBook(b *db.Book, options ...ScanBookOption) error {
 
 	logger := log.With("book_path", option.path)
 	book := bookMeta{
-		Path: option.path,
+		Path:    option.path,
+		ModTime: option.modTime,
 	}
 
 	book.bookNameMeta = parseBookName(filepath.Base(option.path))
@@ -330,11 +331,11 @@ func (l *Type) walkDir(ctx context.Context, lib *db.Library, root string,
 	}
 
 	cf := l.classifyFiles(root, entries)
-	if len(cf.volumes) == 0 {
+	// ignore files under lib root
+	if len(cf.volumes) == 0 || root == lib.Path {
 		return l.handleDirs(ctx, lib, root, cf.directories, knownBooks)
 	}
 
-	// TODO: without progress?
 	bookInDatabase, err := l.db.GetBook(ctx, db.GetBookOptions{Path: root})
 	if err != nil {
 		log.Errorf("get exist book by path %s error: %s", root, err)
@@ -379,7 +380,7 @@ func (l *Type) handleBook(libraryID int64, book *bookMeta, bookOld *db.Book) {
 	// update time
 	item.Book.UpdateAt = db.NewTime(now)
 	if err := l.q.Add(&item); err != nil {
-		log.Errorf("add book %s to queue error: %s", item.Book.ID, item.Book.Name)
+		log.Errorf("add book %s to queue error: %s", item.Book.Name, err)
 	} else {
 		log.Debugf("add book %s to queue", item.Book.Name)
 	}

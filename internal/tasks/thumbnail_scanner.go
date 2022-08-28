@@ -11,10 +11,16 @@ import (
 	"github.com/chain710/manga/internal/util"
 	"github.com/chain710/workqueue"
 	"github.com/disintegration/imaging"
-	"time"
 )
 
 type ThumbnailOption func(*ThumbnailScanner)
+
+func ThumbWithSize(width, height int) ThumbnailOption {
+	return func(scanner *ThumbnailScanner) {
+		scanner.thumbWidth = width
+		scanner.thumbHeight = height
+	}
+}
 
 func ThumbWithArchiveCache(archiveCache *arc.ArchiveCache) ThumbnailOption {
 	return func(scanner *ThumbnailScanner) {
@@ -33,7 +39,7 @@ func NewThumbnailScanner(db db.Interface, options ...ThumbnailOption) *Thumbnail
 		},
 		thumbWidth:  210,
 		thumbHeight: 297,
-		interval:    time.Minute * 10,
+		notify:      make(chan struct{}, 1),
 	}
 	for _, apply := range options {
 		apply(d)
@@ -49,7 +55,7 @@ type ThumbnailScanner struct {
 	options      imagehelper.VolumeThumbnailOptions
 	thumbWidth   int
 	thumbHeight  int
-	interval     time.Duration
+	notify       chan struct{}
 }
 
 type thumbOfVolumeIndex int64
@@ -81,19 +87,39 @@ func (i thumbOfBook) Index() interface{} {
 }
 
 func (d *ThumbnailScanner) Start(ctx context.Context) {
+	d.Scan() // scan at startup
 	go d.workloop(ctx)
-	ticker := clk.NewTicker(d.interval)
-	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			log.Debugf("stopping thumb scanner")
 			d.q.ShutDown()
 			break
-		case <-ticker.C():
+		case <-d.notify:
 			_ = d.listVolumes(ctx, false)
 			_ = d.listBooks(ctx)
 		}
+	}
+}
+
+func (d *ThumbnailScanner) Scan() {
+	select {
+	case d.notify <- struct{}{}:
+		log.Debugf("notify thumb scan ok")
+	default:
+		log.Debugf("notify thumb scan miss")
+	}
+}
+
+func (d *ThumbnailScanner) ScanBook(books ...db.Book) {
+	for i := range books {
+		_ = d.q.Add(thumbOfBook{book: books[i]})
+	}
+}
+
+func (d *ThumbnailScanner) ScanVolumes(vols ...db.Volume) {
+	for i := range vols {
+		_ = d.q.Add(thumbOfVolume{volume: vols[i]})
 	}
 }
 
@@ -107,10 +133,6 @@ func (d *ThumbnailScanner) Once(ctx context.Context, all bool) error {
 	d.q.ShutDown()
 	d.workloop(ctx)
 	return nil
-}
-
-func (d *ThumbnailScanner) ScanVolume(volume db.Volume) {
-	_ = d.q.Add(thumbOfVolume{volume: volume})
 }
 
 func (d *ThumbnailScanner) listVolumes(ctx context.Context, all bool) error {
@@ -137,9 +159,7 @@ func (d *ThumbnailScanner) listBooks(ctx context.Context) error {
 		return err
 	}
 
-	for i := range books {
-		_ = d.q.Add(thumbOfBook{book: books[i]})
-	}
+	d.ScanBook(books...)
 	return nil
 }
 
@@ -202,7 +222,7 @@ func (d *ThumbnailScanner) scanVolume(ctx context.Context, volume *db.Volume) {
 		return
 	}
 
-	logger.Infof("set volume thumb ok, size=%d", buf.Len())
+	logger.Debugf("set volume thumb ok, size=%d", buf.Len())
 }
 
 func (d *ThumbnailScanner) scanBook(ctx context.Context, book *db.Book) {
@@ -223,4 +243,6 @@ func (d *ThumbnailScanner) scanBook(ctx context.Context, book *db.Book) {
 		logger.Errorf("set book thumb (vol %d) error: %s", thumb.ID, err)
 		return
 	}
+
+	logger.Debugf("set book thumbnail ok, size=%d", len(thumb.Thumbnail))
 }

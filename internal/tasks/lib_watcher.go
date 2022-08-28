@@ -8,6 +8,7 @@ import (
 	"github.com/chain710/manga/internal/log"
 	"github.com/chain710/manga/internal/scanner"
 	"github.com/chain710/workqueue"
+	"github.com/fsnotify/fsnotify"
 	"time"
 )
 
@@ -33,11 +34,18 @@ func WithScannerOptions(options ...scanner.Option) LibraryWatcherOption {
 
 func WithWatchInterval(duration time.Duration) LibraryWatcherOption {
 	return func(sd *LibraryWatcher) {
-		sd.interval = duration
+		if duration > 0 {
+			sd.interval = duration
+		}
 	}
 }
 
-func NewLibraryWatcher(db db.Interface, options ...LibraryWatcherOption) *LibraryWatcher {
+func NewLibraryWatcher(db db.Interface, thumbScanner *ThumbnailScanner, options ...LibraryWatcherOption) (*LibraryWatcher, error) {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Errorf("fsnotify.NewWatcher error: %s", err)
+		return nil, err
+	}
 	s := &LibraryWatcher{
 		database:             db,
 		interval:             time.Hour * 24,
@@ -45,13 +53,15 @@ func NewLibraryWatcher(db db.Interface, options ...LibraryWatcherOption) *Librar
 		scanQueue:            workqueue.NewRetryQueue("scanner.scan", clk),
 		serializeWorkerCount: 1,
 		scanWorkerCount:      1,
+		thumbScanner:         thumbScanner,
+		watcher:              watcher,
 	}
 
 	for _, apply := range options {
 		apply(s)
 	}
 
-	return s
+	return s, nil
 }
 
 /*
@@ -66,6 +76,8 @@ type LibraryWatcher struct {
 	scanWorkerCount      int
 	scanOptions          []scanner.Option
 	volumesCache         *cache.Volumes
+	thumbScanner         *ThumbnailScanner
+	watcher              *fsnotify.Watcher
 }
 
 func (s *LibraryWatcher) Start(ctx context.Context) {
@@ -75,28 +87,78 @@ func (s *LibraryWatcher) Start(ctx context.Context) {
 	}
 
 	for i := 0; i < s.scanWorkerCount; i++ {
-		go s.scan(ctx, i)
+		go s.processQueue(ctx, i)
 	}
+
+	//goland:noinspection GoUnhandledErrorResult
+	defer s.watcher.Close()
 
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			s.serializeQueue.ShutDown()
-			s.scanQueue.ShutDown()
-			return
-		case <-ticker.C:
-			sc := scanner.New(s.serializeQueue, s.database, s.scanOptions...)
-			if err := sc.Scan(ctx); err != nil {
-				log.Errorf("scan error: %s", err)
+	go func() {
+		// first scan
+		log.Debugf("first scan on startup")
+		s.scan(ctx)
+		log.Debugf("first scan on startup finished")
+		for {
+			select {
+			case <-ticker.C:
+				_ = s.watchAllLibraries(ctx)
+				s.scan(ctx)
+			case event, ok := <-s.watcher.Events:
+				if !ok {
+					log.Panicf("fsnotify watcher events closed")
+					return
+				}
+
+				log.Debugf("incoming fsnotify %s", event.String())
+				s.scan(ctx)
+			case err, ok := <-s.watcher.Errors:
+				if !ok {
+					log.Panicf("fsnotify watcher errors closed")
+					return
+				}
+				log.Errorf("fsnotify error: %s", err)
 			}
 		}
+	}()
+
+	if err := s.watchAllLibraries(ctx); err != nil {
+		log.Panicf("watch all lib failed when startup")
 	}
+
+	<-ctx.Done()
+	log.Infof("library watcher stopped")
+	s.serializeQueue.ShutDown()
+	s.scanQueue.ShutDown()
+	return
+}
+
+func (s *LibraryWatcher) watchAllLibraries(ctx context.Context) error {
+	libs, err := s.database.ListLibraries(ctx)
+	if err != nil {
+		log.Errorf("list library error: %s", err)
+		return err
+	}
+
+	for _, lib := range libs {
+		if err := s.watcher.Add(lib.Path); err != nil {
+			log.Errorf("add lib %s watcher error: %s", lib.Path, err)
+			return err
+
+		}
+	}
+
+	log.Infof("library watcher start complete")
+	return nil
 }
 
 // AddLibrary add library to scan queue
 func (s *LibraryWatcher) AddLibrary(library db.Library) error {
+	if err := s.watcher.Add(library.Path); err != nil {
+		log.Errorf("add lib path %s to fsnotify watcher error: %s", library.Path, err)
+		return err
+	}
 	return s.scanQueue.Add(&libraryItem{library})
 }
 
@@ -123,7 +185,14 @@ func (s *LibraryWatcher) Once(ctx context.Context, id int64) error {
 	return nil
 }
 
-func (s *LibraryWatcher) scan(ctx context.Context, worker int) {
+func (s *LibraryWatcher) scan(ctx context.Context) {
+	sc := scanner.New(s.serializeQueue, s.database, s.scanOptions...)
+	if err := sc.Scan(ctx); err != nil {
+		log.Errorf("scan error: %s", err)
+	}
+}
+
+func (s *LibraryWatcher) processQueue(ctx context.Context, worker int) {
 	for {
 		item, shutdown := s.scanQueue.Get()
 		if shutdown {
@@ -131,16 +200,17 @@ func (s *LibraryWatcher) scan(ctx context.Context, worker int) {
 			return
 		}
 
-		switch val := item.(type) {
-		case *libraryItem:
-			s.scanLibrary(ctx, &val.Library)
-		case *bookItem:
-			s.scanBook(&val.Book)
-		default:
-			panic(fmt.Errorf("unknown item type: %+v", item))
-		}
-
-		s.scanQueue.Done(item, nil)
+		func() {
+			defer s.scanQueue.Done(item, nil)
+			switch val := item.(type) {
+			case *libraryItem:
+				s.scanLibrary(ctx, &val.Library)
+			case *bookItem:
+				s.scanBook(&val.Book)
+			default:
+				panic(fmt.Errorf("unknown item type: %+v", item))
+			}
+		}()
 	}
 }
 
@@ -168,29 +238,37 @@ func (s *LibraryWatcher) serialize(ctx context.Context, worker int) {
 			return
 		}
 
-		b := item.(*scanner.BookItem)
-		var err error
-		switch b.Op {
-		case scanner.OpNew:
-			err = s.database.CreateBook(ctx, &b.Book)
-		case scanner.OpUpdate:
-			err = s.database.UpdateBook(ctx, &b.Book)
-		case scanner.OpDelete:
-			err = s.database.DeleteBook(ctx, db.DeleteBookOptions{ID: b.Book.ID})
-		default:
-			panic(fmt.Errorf("unknown op %s", b.Op))
-		}
+		func() {
+			defer s.serializeQueue.Done(item, nil)
+			b := item.(*scanner.BookItem)
+			var err error
+			switch b.Op {
+			case scanner.OpNew:
+				err = s.database.CreateBook(ctx, &b.Book)
+			case scanner.OpUpdate:
+				err = s.database.UpdateBook(ctx, &b.Book)
+			case scanner.OpDelete:
+				err = s.database.DeleteBook(ctx, db.DeleteBookOptions{ID: b.Book.ID})
+			default:
+				panic(fmt.Errorf("unknown op %s", b.Op))
+			}
 
-		if err != nil {
-			log.Errorw("sync book in database error",
-				"op", b.Op, "id", b.Book.ID, "name", b.Book.Name,
-				"error", err)
-		} else {
-			log.Infow("op book in database ok",
-				"op", b.Op, "id", b.Book.ID, "name", b.Book.Name)
-		}
-		// evict all volume cache
-		s.evictVolumeCache(&b.Book)
+			if err != nil {
+				log.Errorw("sync book in database error",
+					"op", b.Op, "id", b.Book.ID, "name", b.Book.Name,
+					"error", err)
+			} else {
+				log.Infow("op book in database ok",
+					"op", b.Op, "id", b.Book.ID, "name", b.Book.Name)
+			}
+
+			// tell thumb scanner to work
+			if nil != s.thumbScanner {
+				s.thumbScanner.Scan()
+			}
+			// evict all volume cache
+			s.evictVolumeCache(&b.Book)
+		}()
 	}
 }
 
