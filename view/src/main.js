@@ -10,22 +10,25 @@ import router from "./router";
 import lineClamp from "vue-line-clamp";
 import i18n from "./i18n";
 import { createPinia, PiniaVuePlugin } from "pinia";
-import persistedstate from 'pinia-plugin-persistedstate'
+import persistedstate from "pinia-plugin-persistedstate";
+import VueRouter from "vue-router";
 
 Vue.config.productionTip = false;
 Vue.use(PiniaVuePlugin);
+const pinia = createPinia();
+pinia.use(persistedstate);
+Vue.use(VueRouter);
 Vue.use(lineClamp);
 Vue.use(service);
 Vue.use(convert);
 Vue.use(vconst);
 Vue.use(hub);
 Vue.use(settings);
-const pinia = createPinia();
-pinia.use(persistedstate)
+
 new Vue({
+  pinia,
   router,
   vuetify,
   i18n,
-  pinia,
   render: (h) => h(App),
 }).$mount("#app");

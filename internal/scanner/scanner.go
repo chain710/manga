@@ -269,6 +269,11 @@ func (l *Type) ScanBook(b *db.Book, options ...ScanBookOption) error {
 		book.Volumes = append(book.Volumes, *vol)
 	}
 
+	if len(book.Volumes) == 0 {
+		logger.Warnf("scan book without any volumes")
+		return nil
+	}
+
 	if l.sortVolumes != nil {
 		l.sortVolumes(book.Volumes)
 	}
@@ -336,6 +341,7 @@ func (l *Type) walkDir(ctx context.Context, lib *db.Library, root string,
 		return l.handleDirs(ctx, lib, root, cf.directories, knownBooks)
 	}
 
+	// treat as book
 	bookInDatabase, err := l.db.GetBook(ctx, db.GetBookOptions{Path: root})
 	if err != nil {
 		log.Errorf("get exist book by path %s error: %s", root, err)

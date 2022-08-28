@@ -17,6 +17,7 @@ type migrateCmd struct {
 }
 
 func (m *migrateCmd) RunE(cmd *cobra.Command, args []string) error {
+	// viperBindPFlag(cmd.Flags())
 	dataSourceName := viper.GetString("dsn")
 	if dataSourceName == "" {
 		return errors.New("dsn should not be empty")
@@ -64,7 +65,6 @@ func init() {
 		RunE:    cmd.RunE,
 	}
 
-	realCmd.Flags().StringP("dsn", "", "", "data source name, like postgres://localhost:5432/db?sslmode=disable")
-	_ = viper.BindPFlag("dsn", realCmd.Flags().Lookup("dsn"))
+	viperFlag(realCmd.Flags(), "dsn", "", "data source name, like postgres://localhost:5432/db?sslmode=disable")
 	rootCmd.AddCommand(realCmd)
 }

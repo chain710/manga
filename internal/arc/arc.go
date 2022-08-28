@@ -2,8 +2,8 @@ package arc
 
 import (
 	"github.com/chain710/manga/internal/log"
-	"github.com/gen2brain/go-unarr"
-	"io"
+	"path/filepath"
+	"strings"
 )
 
 type OpenOptions struct {
@@ -43,47 +43,45 @@ func Open(path string, option ...OpenOption) (Archive, error) {
 		}
 	}
 
-	a, err := unarr.NewArchive(path)
+	archive, err := open(path, opt)
 	if err != nil {
+		log.Errorf("open archive failed", "path", path, "error", err)
 		return nil, err
 	}
 
-	log.Debugf("open archive: %s", path)
-	var files []File
-	if !opt.SkipReadingFiles {
-		for {
-			entryErr := a.Entry()
-			if entryErr != nil {
-				if entryErr == io.EOF {
-					break
-				}
-				return nil, entryErr
-			}
-
-			files = append(files, File{
-				name:    a.Name(),
-				offset:  a.Offset(),
-				modTime: a.ModTime(),
-				size:    a.Size(),
-			})
-		}
-	}
-
-	ra := &realArchive{
-		path:  path,
-		impl:  a,
-		files: files,
-	}
-
 	if opt.Cache != nil {
-		inCache, added := opt.Cache.SetAndGet(opt.CacheKey, ra)
+		inCache, added := opt.Cache.SetAndGet(opt.CacheKey, archive)
 		if !added {
 			log.Warnw("duplicate open archive in cache, should close", "key", opt.CacheKey, "path", path)
-			_ = ra.Close()
+			_ = archive.Close()
 		}
 		return inCache, nil
 	}
-	return ra, nil
+	return archive, nil
+}
+
+func open(p string, opt OpenOptions) (Archive, error) {
+	ext := strings.ToLower(filepath.Ext(p))
+	var tryFunctions []func() (Archive, error)
+	switch ext {
+	case ".rar":
+		tryFunctions = append(tryFunctions, func() (Archive, error) { return newRARArchive(p, opt.SkipReadingFiles) })
+		tryFunctions = append(tryFunctions, func() (Archive, error) { return newRealArchive(p, opt.SkipReadingFiles) })
+	default:
+		tryFunctions = append(tryFunctions, func() (Archive, error) { return newRealArchive(p, opt.SkipReadingFiles) })
+		tryFunctions = append(tryFunctions, func() (Archive, error) { return newRARArchive(p, opt.SkipReadingFiles) })
+	}
+
+	var ret Archive
+	var err error
+	for _, f := range tryFunctions {
+		ret, err = f()
+		if err == nil {
+			return ret, nil
+		}
+	}
+
+	return nil, err
 }
 
 type Archive interface {

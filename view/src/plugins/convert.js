@@ -14,7 +14,7 @@ export default {
       return {
         id: book.id,
         title: { text: book.name, to: { name: "book", params: { bookID: book.id } } },
-        thumb: `/apis/v1/book/${book.id}/thumb`,
+        thumb: this.$service.bookThumbURL(book.id),
         subTitle: { text: book.writer },
         bottomText: this.$t("global.total_volumes", { count: book.volume }),
         unread: book.progress == undefined, // boolean show unread triangle
@@ -50,7 +50,7 @@ export default {
       const result = {
         id: volume.id,
         title: { text: volume.title },
-        thumb: `/apis/v1/volume/${volume.id}/thumb`,
+        thumb: this.$service.volumeThumbURL(volume.id),
         subTitle: { text: volume.book_name },
         bottomText: null,
         readPercent: rp,
@@ -86,7 +86,7 @@ export default {
       return {
         id: vid,
         title: { text: book.progress.title, to: { name: "book", params: { bookID: book.id } } },
-        thumb: `/apis/v1/volume/${vid}/thumb`,
+        thumb: this.$service.volumeThumbURL(vid),
         subTitle: { text: "" },
         bottomText: this.$t("global.reading_volume", {
           num: book.progress.volume,

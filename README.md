@@ -1,30 +1,43 @@
-# manga
+# MangaDepot
 
-## TODO server
+## what
 
-- [x] remove not-exist book in Scan or Watcher
-- [x] scan volume cover
-- [x] api: patch library
-- [x] library scan: save last scan time
-- [x] http server cache image(header)
+Manga reader in browser. Written in go
+
+inspired by [kavitareader](https://www.kavitareader.com/) and [komga](https://komga.org/)
+
+copy most front end code from komga, with improvement in reader and better archive support
+
+## limitation
+
+- no user management nor authentication
+- no support for files other than archive(zip, rar)
+- database: only support postrges
+
+## build
+
+```bash
+# build docker image
+docker build --no-cache --progress=plain -t chain710/manga-depot:latest .
+```
+
+## run
+
+```bash
+# setup database
+docker run -it --rm chain710/manga-depot:v0.0.1 migrate up --dsn 'postgres://manga:123456@localhost:5432/manga?sslmode=disable'
+# run service
+docker run -d -v /host_books:/container_books -p 8080:8080 chain710/manga-depot:v0.0.1 serve --dsn 'postgres://manga:123456@localhost:5432/manga?sslmode=disable'
+```
+
+## TODO 
+
+### server
 - [ ] improve cover selection
 - [ ] list ongoing tasks(scan lib mostly)
-- [ ] embed static dist files
-- [ ] improve sql builder
+- [ ] code refine: sql builder
 
-## TODO front end
-- [x] Reader gesture, read mode: smart(left=>right, right=>left)
-- [x] reader rotate image
-- [x] reader auto next/prev book when hit last/first page
-- [x] manual set book/volume cover(improve usability: keep selection aspect, loading, buttons style)
-- [x] replace drag/resize: https://github.com/mauricius/vue-draggable-resizable
-- [x] book, volume progress
-- [x] auto page size base on initial page width
-- [ ] reader original size
+### front end
+- [ ] reader original mode
 - [ ] book summary responsive improve
-- [x] add library
-- [ ] book page fab, edit
-- [x] library page fab, edit
-- [x] hub
-- [x] local storage
-- [x] display extras
+- [ ] book meta edit

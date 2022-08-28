@@ -55,7 +55,7 @@
       <library-edit-dialog
         v-model="showLibraryEdit"
         :library="library"
-        @updated="$syncLibrary(this)"></library-edit-dialog>
+        @updated="$hub.syncLibraries"></library-edit-dialog>
     </v-container>
   </div>
 </template>
@@ -161,12 +161,19 @@ export default {
         let resp = await this.$service.deleteLibrary(this.library.id);
         console.log(`delete library ${this.library.id}`, resp);
         this.$ninfo("delete_library");
-        this.$router.replace({ name: "libraries", params: { libraryID: this.$LIBRARY_ID_ALL } });
       } catch (error) {
         this.$nerror("delete_library", error);
         console.error(`delete library error ${this.library.id}`, error);
-      } finally {
-        this.$syncLibrary();
+      }
+
+      try {
+        await this.$hub.syncLibraries();
+        this.$router.replace({ name: "libraries", params: { libraryID: this.$LIBRARY_ID_ALL } }).catch((err) => {
+          // may navigate to welcome, which is expected
+          console.debug(`replace lib error`, err);
+        });
+      } catch (error) {
+        console.error("navigate to libraries error", error);
       }
     },
     async setup(lib, page) {

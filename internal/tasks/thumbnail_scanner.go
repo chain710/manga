@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/chain710/manga/internal/arc"
 	"github.com/chain710/manga/internal/db"
 	"github.com/chain710/manga/internal/imagehelper"
@@ -22,9 +24,21 @@ func ThumbWithSize(width, height int) ThumbnailOption {
 	}
 }
 
+func ThumbWithRetryDelay(delay time.Duration) ThumbnailOption {
+	return func(scanner *ThumbnailScanner) {
+		scanner.retryDelay = delay
+	}
+}
+
 func ThumbWithArchiveCache(archiveCache *arc.ArchiveCache) ThumbnailOption {
 	return func(scanner *ThumbnailScanner) {
 		scanner.archiveCache = archiveCache
+	}
+}
+
+func ThumbScannerWorkerCount(val int) ThumbnailOption {
+	return func(scanner *ThumbnailScanner) {
+		scanner.workerCount = val
 	}
 }
 
@@ -40,6 +54,8 @@ func NewThumbnailScanner(db db.Interface, options ...ThumbnailOption) *Thumbnail
 		thumbWidth:  210,
 		thumbHeight: 297,
 		notify:      make(chan struct{}, 1),
+		retryDelay:  time.Second * 30,
+		workerCount: 1,
 	}
 	for _, apply := range options {
 		apply(d)
@@ -56,6 +72,8 @@ type ThumbnailScanner struct {
 	thumbWidth   int
 	thumbHeight  int
 	notify       chan struct{}
+	retryDelay   time.Duration
+	workerCount  int
 }
 
 type thumbOfVolumeIndex int64
@@ -87,17 +105,22 @@ func (i thumbOfBook) Index() interface{} {
 }
 
 func (d *ThumbnailScanner) Start(ctx context.Context) {
+	log.Debugf("thumbscanner start worker(%d)...", d.workerCount)
+	for i := 0; i < d.workerCount; i++ {
+		go d.workloop(ctx)
+	}
+
 	d.Scan() // scan at startup
-	go d.workloop(ctx)
+
 	for {
 		select {
 		case <-ctx.Done():
 			log.Debugf("stopping thumb scanner")
 			d.q.ShutDown()
-			break
+			return
 		case <-d.notify:
 			_ = d.listVolumes(ctx, false)
-			_ = d.listBooks(ctx)
+			_ = d.listBooks(ctx) // TODO: FIXME 有可能listBook拿到最新的book，listVolumes里还没有
 		}
 	}
 }
@@ -113,6 +136,7 @@ func (d *ThumbnailScanner) Scan() {
 
 func (d *ThumbnailScanner) ScanBook(books ...db.Book) {
 	for i := range books {
+		log.Debugf("thumb scaner: add book %d:%s to queue", books[i].ID, books[i].Name)
 		_ = d.q.Add(thumbOfBook{book: books[i]})
 	}
 }
@@ -147,6 +171,7 @@ func (d *ThumbnailScanner) listVolumes(ctx context.Context, all bool) error {
 	}
 
 	for i := range volumes {
+		log.Debugf("thumb scaner: add volume %d:%s to queue", volumes[i].ID, volumes[i].Title)
 		_ = d.q.Add(thumbOfVolume{volume: volumes[i]})
 	}
 	return nil
@@ -167,24 +192,31 @@ func (d *ThumbnailScanner) workloop(ctx context.Context) {
 	for {
 		item, shutdown := d.q.Get()
 		if shutdown {
-			log.Infof("volume thumb shutdown")
+			log.Infof("ThumbnailScanner shutdown")
 			return
 		}
 
+		var retry *time.Duration
 		switch b := item.(type) {
 		case thumbOfVolume:
 			d.scanVolume(ctx, &b.volume)
 		case thumbOfBook:
-			d.scanBook(ctx, &b.book)
+			if d.scanBook(ctx, &b.book) {
+				rd := d.retryDelay
+				retry = &rd
+				log.Debugf("scan book %d:%s retry %v", b.book.ID, b.book.Name, *retry)
+			}
 		default:
 			panic(fmt.Sprintf("unknown type %v", b))
 		}
 
+		d.q.Done(item, retry)
 	}
 }
 
 func (d *ThumbnailScanner) scanVolume(ctx context.Context, volume *db.Volume) {
 	logger := log.With("volume", volume.Path)
+	logger.Debugf("scan volume thumb: %d:%s", volume.ID, volume.Title)
 	fh, err := util.FileHash(volume.Path)
 	if err != nil {
 		logger.Errorf("gen file hash error: %s", err)
@@ -225,24 +257,28 @@ func (d *ThumbnailScanner) scanVolume(ctx context.Context, volume *db.Volume) {
 	logger.Debugf("set volume thumb ok, size=%d", buf.Len())
 }
 
-func (d *ThumbnailScanner) scanBook(ctx context.Context, book *db.Book) {
+// scanBook return true means should retry, otherwise return false
+func (d *ThumbnailScanner) scanBook(ctx context.Context, book *db.Book) bool {
 	logger := log.With("book", book.Path)
+	logger.Debugf("scan book thumb: %d:%s", book.ID, book.Name)
 	thumb, err := d.database.GetVolumeThumbnail(ctx, db.GetVolumeThumbOptions{BookID: &book.ID})
 	if err != nil {
 		logger.Errorf("get volume thumb error: %s", err)
-		return
+		return false
 	}
 
 	if thumb == nil {
-		logger.Debugf("volume thumb not found")
-		return
+		logger.Warnf("volume thumb not found")
+		// should retry later
+		return true
 	}
 
 	bt := db.BookThumbnail{ID: book.ID, Hash: thumb.Hash, Thumbnail: thumb.Thumbnail}
 	if err := d.database.SetBookThumbnail(ctx, bt); err != nil {
 		logger.Errorf("set book thumb (vol %d) error: %s", thumb.ID, err)
-		return
+		return false
 	}
 
-	logger.Debugf("set book thumbnail ok, size=%d", len(thumb.Thumbnail))
+	logger.Infof("set book thumbnail ok, size=%d", len(thumb.Thumbnail))
+	return false
 }

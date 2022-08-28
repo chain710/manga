@@ -1,10 +1,19 @@
 import { defineStore } from "pinia";
 import Vue from "vue";
+import { Service } from "./service";
 
 // a reactive hub; store state across multi components
 export const useHub = defineStore("hub", {
-  state: () => ({ tasks: [] }),
+  state: () => ({ ready: false, tasks: [], libraries: [] }),
+  getters: {
+    isReady: (state) => state.ready,
+  },
   actions: {
+    async init() {
+      this.service = new Service();
+      await this.addTask(this.syncLibraries());
+      this.ready = true;
+    },
     addTask(t) {
       let wrapper = { done: false, promise: t };
       this.tasks.push(wrapper);
@@ -24,6 +33,15 @@ export const useHub = defineStore("hub", {
     purgeTasks() {
       while (this.tasks.length > 0 && this.tasks[0].done) {
         this.tasks.splice(0, 1);
+      }
+    },
+    async syncLibraries() {
+      console.debug(`now sync lib`);
+      const resp = await this.service.listLibraries();
+      if (resp.data.data) {
+        this.libraries = resp.data.data;
+      } else {
+        this.libraries = [];
       }
     },
   },
@@ -53,15 +71,15 @@ export default {
     vue.prototype.$hubon = function (event, handler) {
       this.__v.$on(event, handler);
     };
+    vue.prototype.$hubemit = function (event, args) {
+      this.__v.$emit(event, args);
+    };
     vue.prototype.$ninfo = function (message, args) {
       this.__v.$emit("snack-message", { level: "info", message: this.$t(`message.info.${message}`, args) });
     };
     vue.prototype.$nerror = function (message, error, args) {
       const msgargs = Object.assign({ err: extractError(error) }, args);
       this.__v.$emit("snack-message", { level: "error", message: this.$t(`message.error.${message}`, msgargs) });
-    };
-    vue.prototype.$syncLibrary = function () {
-      this.__v.$emit("sync-library");
     };
   },
 };

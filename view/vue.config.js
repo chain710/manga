@@ -1,7 +1,7 @@
 const { defineConfig } = require("@vue/cli-service");
 module.exports = defineConfig({
   transpileDependencies: ["vuetify"],
-
+  publicPath: ".",
   devServer: {
     proxy: {
       "/apis": {
@@ -19,6 +19,13 @@ module.exports = defineConfig({
       enableInSFC: true,
       includeLocales: false,
       enableBridge: true,
+    },
+  },
+
+  pages: {
+    index: {
+      entry: "src/main.js",
+      title: "MangaDepot",
     },
   },
 });

@@ -65,7 +65,7 @@
         </v-list-item>
         <!--libraries-->
         <v-list-item
-          v-for="(l, index) in libraries"
+          v-for="(l, index) in $hub.libraries"
           :key="index"
           dense
           :to="{ name: 'libraries', params: { libraryID: l.id } }">
@@ -87,7 +87,7 @@
       path="/"
       :dialog-title="$t('dialog.file_browser.title')"
       :confirm-text="$t('dialog.file_browser.confirm')"></file-browser-dialog>
-    <library-edit-dialog v-model="showLibraryEdit" @updated="$syncLibrary(this)"></library-edit-dialog>
+    <library-edit-dialog v-model="showLibraryEdit" @updated="$hub.syncLibraries"></library-edit-dialog>
   </div>
 </template>
 <script>
@@ -99,7 +99,6 @@ export default {
   data: function () {
     return {
       drawer: this.$vuetify.breakpoint.lgAndUp,
-      libraries: [],
       barButtons: [],
       barTitle: null,
       showFileBrowser: false,
@@ -108,13 +107,11 @@ export default {
   },
 
   mounted: async function () {
-    this.$hubon("sync-library", () => {
-      this.$hub.addTask(this.setup());
+    this.$hubon("add-library", () => {
+      this.addLibrary();
     });
-    await this.$hub.addTask(this.setup());
   },
   methods: {
-    syncLibrary() {},
     addLibrary() {
       this.showLibraryEdit = true;
     },
@@ -135,30 +132,13 @@ export default {
           this.barButtons = [];
           this.barTitle = { text: options.value.name, chip: options.value.count };
           break;
+        case "welcome":
         case "dashboard":
           this.barButtons = [];
           this.barTitle = null;
           break;
         default:
           throw `unknown main-enter ${options.name}`;
-      }
-    },
-    async setup() {
-      try {
-        let resp = await this.$hub.addTask(this.$service.listLibraries());
-        this.libraries.splice(0, this.libraries.length); // clear
-        const libs = resp.data.data;
-        if (libs) {
-          for (let lib of libs) {
-            this.libraries.push({
-              id: lib.id,
-              name: lib.name,
-            });
-          }
-        }
-      } catch (error) {
-        this.$nerror("list_library", error);
-        console.log(`list lib error: ${error}`);
       }
     },
   },

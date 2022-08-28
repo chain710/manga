@@ -107,24 +107,25 @@ func (s *LibraryWatcher) Start(ctx context.Context) {
 				s.scan(ctx)
 			case event, ok := <-s.watcher.Events:
 				if !ok {
-					log.Panicf("fsnotify watcher events closed")
-					return
+					log.Warnf("fsnotify watcher events closed")
+					break
 				}
 
 				log.Debugf("incoming fsnotify %s", event.String())
 				s.scan(ctx)
 			case err, ok := <-s.watcher.Errors:
+				// just logging
 				if !ok {
-					log.Panicf("fsnotify watcher errors closed")
-					return
+					log.Warnf("fsnotify watcher errors closed")
+				} else {
+					log.Errorf("fsnotify error: %s", err)
 				}
-				log.Errorf("fsnotify error: %s", err)
 			}
 		}
 	}()
 
 	if err := s.watchAllLibraries(ctx); err != nil {
-		log.Panicf("watch all lib failed when startup")
+		log.Errorf("watch all lib failed when startup, should try later")
 	}
 
 	<-ctx.Done()

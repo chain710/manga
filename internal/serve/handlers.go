@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"errors"
+
 	"github.com/chain710/manga/internal/arc"
 	"github.com/chain710/manga/internal/cache"
 	"github.com/chain710/manga/internal/db"
@@ -526,7 +527,7 @@ func (h *handlers) apiGetVolumeThumbnail(ctx *gin.Context) (*types.Image, error)
 	}
 
 	if thumb == nil {
-		logger.Debugf("thumb not found, try default")
+		logger.Debugf("thumb not found")
 		return nil, errNotFound
 	}
 

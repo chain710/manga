@@ -20,7 +20,7 @@ type toolsCmd struct {
 	forceUpdateThumb  bool
 }
 
-func (t *toolsCmd) setDatabase(_ *cobra.Command, _ []string) error {
+func (t *toolsCmd) initCmd(_ *cobra.Command, _ []string) error {
 	dsn := viper.GetString("dsn")
 	if dsn == "" {
 		return errors.New("dsn required")
@@ -101,25 +101,25 @@ func init() {
 	addLib := &cobra.Command{
 		Use:     "addlib <name> <path>",
 		Args:    cobra.ExactArgs(2),
-		PreRunE: cmd.setDatabase,
+		PreRunE: cmd.initCmd,
 		RunE:    cmd.addLibrary,
 	}
 	scanLib := &cobra.Command{
 		Use:     "scanlib <id>",
 		Args:    cobra.ExactArgs(1),
-		PreRunE: cmd.setDatabase,
+		PreRunE: cmd.initCmd,
 		RunE:    cmd.scanLibrary,
 	}
 	scanLib.Flags().BoolVar(&cmd.ignoreBookModTime, "ignore-book-modtime", false, "ignore book last mod time")
 	setVolThumb := &cobra.Command{
 		Use:     "setvolthumb <vid> <image_path>",
 		Args:    cobra.ExactArgs(2),
-		PreRunE: cmd.setDatabase,
+		PreRunE: cmd.initCmd,
 		RunE:    cmd.setVolumeThumbnail,
 	}
 	scanThumb := &cobra.Command{
 		Use:     "scanthumb",
-		PreRunE: cmd.setDatabase,
+		PreRunE: cmd.initCmd,
 		RunE:    cmd.scanThumbnail,
 	}
 	scanThumb.Flags().BoolVar(&cmd.forceUpdateThumb, "force", false, "force update all thumbs")
@@ -128,7 +128,6 @@ func init() {
 		Short: "tools collection",
 	}
 	realCmd.AddCommand(addLib, scanLib, setVolThumb, scanThumb)
+	viperFlag(realCmd.PersistentFlags(), "dsn", "", "data source name, like postgres://localhost:5432/db?sslmode=disable")
 	rootCmd.AddCommand(realCmd)
-	realCmd.PersistentFlags().StringP("dsn", "", "", "data source name, like postgres://localhost:5432/db?sslmode=disable")
-	_ = viper.BindPFlag("dsn", realCmd.Flags().Lookup("dsn"))
 }

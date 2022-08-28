@@ -3,9 +3,46 @@ package arc
 import (
 	"github.com/chain710/manga/internal/log"
 	"github.com/gen2brain/go-unarr"
+	"io"
 	"io/fs"
 	"sync"
 )
+
+func newRealArchive(path string, skipReadingFiles bool) (*realArchive, error) {
+	a, err := unarr.NewArchive(path)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Debugf("open archive: %s", path)
+	var files []File
+	if !skipReadingFiles {
+		for {
+			entryErr := a.Entry()
+			if entryErr != nil {
+				if entryErr == io.EOF {
+					break
+				}
+				return nil, entryErr
+			}
+
+			files = append(files, File{
+				name:    a.Name(),
+				offset:  a.Offset(),
+				modTime: a.ModTime(),
+				size:    a.Size(),
+			})
+		}
+	}
+
+	ra := &realArchive{
+		path:  path,
+		impl:  a,
+		files: files,
+	}
+
+	return ra, nil
+}
 
 type realArchive struct {
 	mu    sync.Mutex // protect impl

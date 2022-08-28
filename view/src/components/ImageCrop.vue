@@ -41,6 +41,9 @@
             <v-btn @click="close">
               <v-icon>mdi-close</v-icon>
             </v-btn>
+            <v-btn @click.stop="toggleRenderSize">
+              <v-icon>mdi-image-size-select-large</v-icon>
+            </v-btn>
           </v-btn-toggle>
         </div>
       </dragable-resizable>
@@ -51,6 +54,8 @@
 import DragableResizable from "./DragableResizable.vue";
 const defaultCropWidth = 210;
 const defaultCropHeight = 297;
+const renderSizeFitScreen = 0;
+const renderSizeOverflow = 1;
 export default {
   data() {
     return {
@@ -64,6 +69,8 @@ export default {
       setCropWidth: defaultCropWidth,
       setCropHeight: defaultCropHeight,
       oldCrop: null,
+      lockAspect: defaultCropWidth / defaultCropHeight,
+      renderSizeMode: renderSizeFitScreen,
     };
   },
   props: {
@@ -75,6 +82,12 @@ export default {
       this.naturalHeight = event.target.naturalHeight;
       this.resizeImage();
       this.show = true;
+      // set crop w/h after image shown, avoid width/height calculate issue
+      const f = this.fitInto(defaultCropWidth, defaultCropHeight, this.renderWidth, this.renderHeight);
+      if (f.width < defaultCropWidth || f.height < defaultCropHeight) {
+        this.setCropWidth = f.width;
+        this.setCropHeight = f.height;
+      }
     },
     onResize() {
       this.windowWidth = window.innerWidth;
@@ -96,11 +109,7 @@ export default {
       this.$emit("crop", Object.assign({ target }, event));
     },
     resizeImage() {
-      if (this.shouldFit()) {
-        this.imageFitScreen();
-      } else {
-        this.imageOverflow();
-      }
+      this.imageFitScreen();
     },
     shouldFit() {
       // small than screen
@@ -119,23 +128,13 @@ export default {
         this.renderWidth = this.windowWidth;
         this.renderHeight = this.renderWidth / ia;
       }
+      this.renderSizeMode = renderSizeOverflow;
     },
     imageFitScreen() {
       const f = this.fitInto(this.naturalWidth, this.naturalHeight, this.windowWidth, this.windowHeight);
       this.renderWidth = f.width;
       this.renderHeight = f.height;
-      // const wa = this.windowWidth / this.windowHeight;
-      // const ia = this.naturalWidth / this.naturalHeight;
-      // if (wa == ia) {
-      //   this.renderWidth = this.windowWidth;
-      //   this.renderHeight = this.windowHeight;
-      // } else if (wa < ia) {
-      //   this.renderWidth = this.windowWidth;
-      //   this.renderHeight = Math.floor(this.renderWidth / ia);
-      // } else {
-      //   this.renderHeight = this.windowHeight;
-      //   this.renderWidth = Math.floor(this.renderHeight * ia);
-      // }
+      this.renderSizeMode = renderSizeFitScreen;
     },
     toggleCropArea() {
       let f = {};
@@ -162,31 +161,18 @@ export default {
         return { height: h1, width: Math.floor(h1 * a0) };
       }
     },
-    // onImageDrag(x, y) {
-    //   const dx = this.renderWidth - this.windowWidth;
-    //   const dy = this.renderHeight - this.windowHeight;
-    //   let left = x;
-    //   let top = y;
-    //   if (dx > 0) {
-    //     x < -dx && (left = -dx);
-    //     x > 0 && (left = 0);
-    //   } else if (x < 0 || x > dx) {
-    //     x < 0 && (left = 0);
-    //     x > dx && (left = dx);
-    //   }
-
-    //   if (dy > 0) {
-    //     y < -dy && (top = -dy);
-    //     y > 0 && (top = 0);
-    //   } else if (y < 0 || y > dy) {
-    //     y < 0 && (top = 0);
-    //     y > dy && (top = dy);
-    //   }
-
-    //   console.log(`rd(${this.renderWidth}, ${this.renderHeight}) wd(${this.windowWidth}, ${this.windowHeight})`);
-    //   console.log(`input(${x}, ${y}) output(${left}, ${top})`);
-    //   return { left, top };
-    // },
+    toggleRenderSize() {
+      switch (this.renderSizeMode) {
+        case renderSizeOverflow:
+          this.imageFitScreen();
+          break;
+        case renderSizeFitScreen:
+          this.imageOverflow();
+          break;
+        default:
+          console.error(`unknown toggleRenderSize ${this.renderSizeMode}`);
+      }
+    },
   },
   computed: {
     imageStyle() {

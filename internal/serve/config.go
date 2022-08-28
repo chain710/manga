@@ -7,20 +7,22 @@ import (
 )
 
 type Config struct {
-	Addr                 string
-	Debug                bool
-	BaseURI              string
-	DSN                  string
-	ArchiveCacheSize     int
-	PageCacheSize        int
-	ThumbCacheSize       int
-	PrefetchImages       int
-	PrefetchQueue        int
-	ThumbWidth           int
-	ThumbHeight          int
-	WatchInterval        time.Duration
-	ScanWorkerCount      int
-	SerializeWorkerCount int
+	Addr                    string
+	Debug                   bool
+	BaseURI                 string
+	DSN                     string
+	ArchiveCacheSize        int
+	PageCacheSize           int
+	ThumbCacheSize          int
+	PrefetchImages          int
+	PrefetchQueue           int
+	ThumbWidth              int
+	ThumbHeight             int
+	WatchInterval           time.Duration
+	ScanWorkerCount         int
+	SerializeWorkerCount    int
+	ThumbRetryDelay         time.Duration
+	ThumbScannerWorkerCount int
 }
 
 func (c *Config) Validate() error {
@@ -55,6 +57,12 @@ func (c *Config) Validate() error {
 	}
 	if c.SerializeWorkerCount <= 0 {
 		return errors.New("invalid serialize worker count")
+	}
+	if c.ThumbRetryDelay <= 0 {
+		return errors.New("thumb retry delay should > 0")
+	}
+	if c.ThumbScannerWorkerCount <= 0 {
+		return errors.New("thumb scanner worker count should > 0")
 	}
 	return nil
 }

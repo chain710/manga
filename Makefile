@@ -10,7 +10,13 @@ endif
 
 LDFLAGS = "-X '$(REPO)/internal/version.GitCommit=$(GIT_COMMIT)-$(GIT_STATUS)' -X '$(REPO)/internal/version.BuildDate=$(BUILD_DATE)'"
 
-all: mod vet build
+# skip fe build, used in docker build
+bin: mod build
+# complete build, used in development
+all: fe mod vet build
+# in windows development
+win-dev: mod vet
+	go build -o bin/manga.exe $(REPO)
 
 mod:
 	go mod download all
@@ -18,7 +24,9 @@ build:
 	go build -o bin/manga -ldflags $(LDFLAGS) $(REPO)
 vet:
 	go vet ./...
-winbuild: vet
-	go build -o bin/manga.exe $(REPO)
 genmock:
 	mockery --name=Interface --dir internal/db --output internal/db/mocks
+fe-dep:
+	cd view && npm install
+fe: fe-dep
+	cd view && npm run build -- --dest=../static/dist

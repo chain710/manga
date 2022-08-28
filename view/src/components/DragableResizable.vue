@@ -281,26 +281,24 @@ export default {
     this.aspectFactor = (this.w !== "auto" ? this.w : width) / (this.h !== "auto" ? this.h : height);
     this.width = this.w !== "auto" ? this.w : width;
     this.height = this.h !== "auto" ? this.h : height;
+    const [parentWidth, parentHeight] = this.getParentSize();
 
+    this.parentWidth = parentWidth;
+    this.parentHeight = parentHeight;
+    this.right = this.parentWidth - this.width - this.left;
+    this.bottom = this.parentHeight - this.height - this.top;
     // compute parent resize in next tick
-    this.$nextTick(() => {
-      const [parentWidth, parentHeight] = this.getParentSize();
+    // this.$nextTick(() => {
+    //   if (this.parent) {
+    //     if (this.width > this.parentWidth) {
+    //       this.changeWidth(this.parentWidth);
+    //     }
 
-      this.parentWidth = parentWidth;
-      this.parentHeight = parentHeight;
-      this.right = this.parentWidth - this.width - this.left;
-      this.bottom = this.parentHeight - this.height - this.top;
-
-      if (this.parent) {
-        if (this.width > this.parentWidth) {
-          this.changeWidth(this.parentWidth);
-        }
-
-        if (this.height > this.parentHeight) {
-          this.changeHeight(this.parentHeight);
-        }
-      }
-    });
+    //     if (this.height > this.parentHeight) {
+    //       this.changeHeight(this.parentHeight);
+    //     }
+    //   }
+    // });
 
     if (this.active) {
       this.$emit("activated");

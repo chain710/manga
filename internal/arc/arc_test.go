@@ -2,10 +2,17 @@ package arc
 
 import (
 	internalstrings "github.com/chain710/manga/internal/strings"
+	"github.com/klauspost/compress/zip"
 	"github.com/stretchr/testify/require"
 	"path/filepath"
 	"testing"
 )
+
+func TestMy(t *testing.T) {
+	zf, err := zip.OpenReader("testdata/1.zip")
+	require.NoError(t, err)
+	t.Logf("file count: %d", len(zf.File))
+}
 
 func TestOpen(t *testing.T) {
 	tests := []struct {

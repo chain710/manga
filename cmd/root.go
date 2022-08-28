@@ -11,14 +11,19 @@ import (
 )
 
 var (
-	cfgFile  string
-	logLevel = flagvalues.LogLevel{Level: zapcore.ErrorLevel}
+	cfgFile     string
+	logLevel    = flagvalues.LogLevel{Level: zapcore.ErrorLevel}
+	logEncoding = "json"
 )
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "manga",
 	Short: "a manga web service",
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		viperBindPFlag(cmd.Flags())
+		viperBindPFlag(cmd.PersistentFlags())
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -39,11 +44,12 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.manga.yaml)")
 	rootCmd.PersistentFlags().VarP(&logLevel, "log-level", "L", "log level: error|warn|info|debug")
+	rootCmd.PersistentFlags().StringVar(&logEncoding, "log-enc", "json", "log encoding: console|json")
 }
 
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
-	log.Init(log.WithLogLevel(logLevel.Level))
+	log.Init(log.WithLogLevel(logLevel.Level), log.WithLogEncoding(logEncoding))
 	if cfgFile != "" {
 		// Use config file from the flag.
 		viper.SetConfigFile(cfgFile)

@@ -36,7 +36,7 @@ func Init(opts ...Option) {
 	zapConfig.EncoderConfig.EncodeTime = zapcore.RFC3339TimeEncoder
 	c := logConfig{
 		config:  zapConfig,
-		options: []zap.Option{},
+		options: []zap.Option{zap.AddCallerSkip(1)},
 	}
 	for _, opt := range opts {
 		opt(&c)

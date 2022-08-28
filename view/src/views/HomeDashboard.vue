@@ -9,7 +9,7 @@
       </template>
     </horizontal-scroller>
 
-    <horizontal-scroller>
+    <horizontal-scroller v-if="latestUpdateBookItems.length > 0">
       <template v-slot:prepend>
         <div class="title">{{ $t("dashboard.latest") }}</div>
       </template>

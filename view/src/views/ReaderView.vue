@@ -384,7 +384,7 @@ export default {
     },
     enableThumbSelection() {
       // TODO: page reader spreads=>pages
-      const pageURL = `/apis/v1/volume/${this.volume.id}/read/${this.pageNumber}`;
+      const pageURL = this.$service.pageURL(this.volume.id, this.pageNumber);
       this.thumbSelection.imageURL = pageURL;
       this.thumbSelection.enabled = true;
       this.thumbSelection.inProgressing = false;
@@ -398,9 +398,9 @@ export default {
           {
             name: file.path,
             size: file.size,
-            url: `/apis/v1/volume/${this.volume.id}/read/${index + 1}`,
+            url: this.$service.pageURL(this.volume.id, index + 1),
             page: index + 1,
-            thumb: `/apis/v1/volume/${this.volume.id}/read/${index + 1}/thumb`,
+            thumb: this.$service.pageThumbURL(this.volume.id, index + 1),
           },
         ]);
       }
@@ -410,7 +410,7 @@ export default {
       let thumbs = [];
       for (const [index] of this.volume.files.entries()) {
         thumbs.push({
-          url: `/apis/v1/volume/${this.volume.id}/read/${index + 1}/thumb`,
+          url: this.$service.pageThumbURL(this.volume.id, index + 1),
           page: index + 1,
         });
       }

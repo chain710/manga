@@ -3,12 +3,14 @@ module github.com/chain710/manga
 go 1.17
 
 require (
+	github.com/chain710/gounrar v0.0.0-20220901155652-7d3607080ea8
 	github.com/chain710/workqueue v0.1.0
 	github.com/disintegration/imageorient v0.0.0-20180920195336-8147d86e83ec
 	github.com/disintegration/imaging v1.6.2
 	github.com/fsnotify/fsnotify v1.5.4
-	github.com/gen2brain/go-unarr v0.1.4
+	github.com/gen2brain/go-unarr v0.1.5
 	github.com/gin-contrib/gzip v0.0.6
+	github.com/gin-contrib/static v0.0.1
 	github.com/gin-contrib/zap v0.0.2
 	github.com/gin-gonic/gin v1.8.1
 	github.com/golang-migrate/migrate/v4 v4.15.2
@@ -17,6 +19,7 @@ require (
 	github.com/jackc/pgx/v4 v4.10.1
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/jxskiss/base62 v1.1.0
+	github.com/klauspost/compress v1.13.6
 	github.com/lucasb-eyer/go-colorful v1.2.0
 	github.com/spf13/cobra v1.5.0
 	github.com/spf13/pflag v1.0.5
@@ -75,7 +78,7 @@ require (
 	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4 // indirect
 	golang.org/x/image v0.0.0-20210216034530-4410531fe030 // indirect
 	golang.org/x/net v0.0.0-20220520000938-2e3eb7b945c2 // indirect
-	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a // indirect
+	golang.org/x/sys v0.0.0-20220829200755-d48e67d00261 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/xerrors v0.0.0-20220517211312-f3a8303e98df // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
