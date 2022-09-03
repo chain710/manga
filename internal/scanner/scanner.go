@@ -20,7 +20,7 @@ import (
 
 //goland:noinspection RegExpRedundantEscape
 var (
-	regexDelimiter = regexp.MustCompile(`[^\s\]\[_\-\.]+`)
+	regexDelimiter = regexp.MustCompile(`[^\s\]\[_\-\.\(\)]+`)
 )
 
 func New(q workqueue.RetryInterface, database db.Interface, options ...Option) *Type {
@@ -61,6 +61,7 @@ type Type struct {
 
 // Scan db.Book to queue
 func (l *Type) Scan(ctx context.Context) error {
+	log.Debugf("begin scan libraries")
 	libraries, err := l.db.ListLibraries(ctx)
 	if err != nil {
 		log.Errorf("list library error: %s, try later", err)

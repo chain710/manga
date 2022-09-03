@@ -3,6 +3,7 @@ package tasks
 import (
 	"context"
 	"fmt"
+	"github.com/bep/debounce"
 	"github.com/chain710/manga/internal/cache"
 	"github.com/chain710/manga/internal/db"
 	"github.com/chain710/manga/internal/log"
@@ -100,11 +101,14 @@ func (s *LibraryWatcher) Start(ctx context.Context) {
 		log.Debugf("first scan on startup")
 		s.scan(ctx)
 		log.Debugf("first scan on startup finished")
+		deb := debounce.New(5 * time.Second)
+
 		for {
+			shouldScan := false
 			select {
 			case <-ticker.C:
 				_ = s.watchAllLibraries(ctx)
-				s.scan(ctx)
+				shouldScan = true
 			case event, ok := <-s.watcher.Events:
 				if !ok {
 					log.Warnf("fsnotify watcher events closed")
@@ -112,7 +116,7 @@ func (s *LibraryWatcher) Start(ctx context.Context) {
 				}
 
 				log.Debugf("incoming fsnotify %s", event.String())
-				s.scan(ctx)
+				shouldScan = true
 			case err, ok := <-s.watcher.Errors:
 				// just logging
 				if !ok {
@@ -120,6 +124,11 @@ func (s *LibraryWatcher) Start(ctx context.Context) {
 				} else {
 					log.Errorf("fsnotify error: %s", err)
 				}
+			}
+
+			if shouldScan {
+				log.Debugf("debounce scan")
+				deb(func() { s.scan(ctx) })
 			}
 		}
 	}()
@@ -146,7 +155,8 @@ func (s *LibraryWatcher) watchAllLibraries(ctx context.Context) error {
 		if err := s.watcher.Add(lib.Path); err != nil {
 			log.Errorf("add lib %s watcher error: %s", lib.Path, err)
 			return err
-
+		} else {
+			log.Infof("add library %s to watcher", lib.Path)
 		}
 	}
 
@@ -160,6 +170,8 @@ func (s *LibraryWatcher) AddLibrary(library db.Library) error {
 		log.Errorf("add lib path %s to fsnotify watcher error: %s", library.Path, err)
 		return err
 	}
+
+	log.Infof("add library %s to watcher", library.Path)
 	return s.scanQueue.Add(&libraryItem{library})
 }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/bep/debounce"
 	"time"
 
 	"github.com/chain710/manga/internal/arc"
@@ -111,7 +112,7 @@ func (d *ThumbnailScanner) Start(ctx context.Context) {
 	}
 
 	d.Scan() // scan at startup
-
+	deb := debounce.New(time.Second * 3)
 	for {
 		select {
 		case <-ctx.Done():
@@ -119,8 +120,10 @@ func (d *ThumbnailScanner) Start(ctx context.Context) {
 			d.q.ShutDown()
 			return
 		case <-d.notify:
-			_ = d.listVolumes(ctx, false)
-			_ = d.listBooks(ctx) // TODO: FIXME 有可能listBook拿到最新的book，listVolumes里还没有
+			deb(func() {
+				_ = d.listVolumes(ctx, false)
+				_ = d.listBooks(ctx)
+			})
 		}
 	}
 }

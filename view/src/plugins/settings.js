@@ -5,6 +5,7 @@ const useSettings = defineStore("settings", {
     return {
       readMode: "rtl",
       backgroundColor: "bg-black",
+      alwaysFullScreen: false,
     };
   },
   persist: {

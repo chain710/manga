@@ -268,12 +268,8 @@ export default {
         return;
       }
       let container = containers[0];
-      const transformXMax = this.flipDirection
-        ? Math.max(0, container.scrollWidth - this.windowWidth)
-        : 0;
-      const transformXMin = this.flipDirection
-        ? 0
-        : Math.min(0, this.windowWidth - container.scrollWidth);
+      const transformXMax = this.flipDirection ? Math.max(0, container.scrollWidth - this.windowWidth) : 0;
+      const transformXMin = this.flipDirection ? 0 : Math.min(0, this.windowWidth - container.scrollWidth);
       const tx = Math.max(transformXMin, Math.min(transformXMax, x));
       const ty = y; // should with max, min
       const dx = this.imageTransformX - tx;
@@ -382,7 +378,7 @@ export default {
 .left-quarter {
   top: 0;
   left: 0;
-  width: 25%;
+  width: 30%;
   height: 100%;
   position: absolute;
 }
@@ -390,36 +386,36 @@ export default {
 .right-quarter {
   top: 0;
   right: 0;
-  width: 25%;
+  width: 30%;
   height: 100%;
   position: absolute;
 }
 
 .top-quarter {
   top: 0;
-  height: 25%;
+  height: 30%;
   width: 100%;
   position: absolute;
 }
 
 .bottom-quarter {
   bottom: 0;
-  height: 25%;
+  height: 30%;
   width: 100%;
   position: absolute;
 }
 
 .center-horizontal {
   top: 0;
-  left: 25%;
-  width: 50%;
+  left: 30%;
+  width: 40%;
   height: 100%;
   position: absolute;
 }
 
 .center-vertical {
-  top: 25%;
-  height: 50%;
+  top: 30%;
+  height: 40%;
   width: 100%;
   position: absolute;
 }

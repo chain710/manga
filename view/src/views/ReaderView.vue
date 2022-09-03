@@ -39,6 +39,9 @@
           <v-btn @click="showThumbExplorer = true" icon>
             <v-icon>mdi-view-grid</v-icon>
           </v-btn>
+          <v-btn v-if="fullScreenEnabled" icon @click="toggleFullScreen">
+            <v-icon>{{ fullScreenIcon }}</v-icon>
+          </v-btn>
           <!-- <v-btn icon @click="onHelp">
             <v-icon>mdi-help-circle</v-icon>
           </v-btn> -->
@@ -154,6 +157,12 @@
                   v-model="backgroundColor"
                   :label="$t('read.settings.background_color')" />
               </v-list-item>
+              <v-list-item>
+                <settings-switch
+                  v-model="alwaysFullScreen"
+                  :label="$t('read.settings.always_fullscreen')"
+                  :disabled="!fullScreenEnabled" />
+              </v-list-item>
             </v-list>
           </v-card-text>
         </v-card>
@@ -191,13 +200,16 @@
 import PageReader from "@/components/PageReader.vue";
 import ThumbExplorerDialog from "@/components/ThumbExplorerDialog.vue";
 import SettingsSelect from "@/components/SettingsSelect.vue";
+import SettingsSwitch from "@/components/SettingsSwitch.vue";
 import ImageCrop from "@/components/ImageCrop.vue";
+import screenfull from "screenfull";
 import _ from "lodash";
 export default {
   components: {
     PageReader,
     ThumbExplorerDialog,
     SettingsSelect,
+    SettingsSwitch,
     ImageCrop,
   },
   data: function () {
@@ -234,13 +246,35 @@ export default {
       },
       windowWidth: window.innerWidth,
       windowHeight: window.innerHeight,
+      fullScreen: false,
+      fullScreenEnabled: false,
     };
   },
   props: {
     volumeID: { required: true },
   },
+  created() {
+    this.fullScreenEnabled = screenfull.isEnabled;
+    this.fullScreen = screenfull.isFullscreen;
+    if (screenfull.isEnabled) {
+      screenfull.on("change", this.fullScreenChanged);
+    }
+  },
   async mounted() {
     await this.setup(this.volumeID, _.parseInt(this.$route.query.page));
+    if (this.alwaysFullScreen) {
+      try {
+        this.enterFullScreen();
+      } catch (error) {
+        console.log(`enterfull screen error, maybe cause by refresh page`, error);
+      }
+    }
+  },
+  destroyed() {
+    if (screenfull.isEnabled) {
+      screenfull.off("change", this.fullscreenChanged);
+      screenfull.exit();
+    }
   },
   methods: {
     async syncVolume(volumeID) {
@@ -389,8 +423,31 @@ export default {
       this.thumbSelection.enabled = true;
       this.thumbSelection.inProgressing = false;
     },
+    enterFullScreen() {
+      if (!screenfull.isEnabled) {
+        return;
+      }
+      return screenfull.request(document.documentElement, { navigationUI: "hide" });
+    },
+    toggleFullScreen() {
+      if (!screenfull.isEnabled) {
+        return;
+      }
+      if (screenfull.isFullscreen) {
+        screenfull.exit();
+      } else {
+        screenfull.request(document.documentElement, { navigationUI: "hide" });
+      }
+    },
+
+    fullScreenChanged() {
+      this.fullScreen = screenfull.isEnabled && screenfull.isFullscreen;
+    },
   },
   computed: {
+    fullScreenIcon() {
+      return this.fullScreen ? "mdi-fullscreen-exit" : "mdi-fullscreen";
+    },
     spreads() {
       let spreads = [];
       for (const [index, file] of this.volume.files.entries()) {
@@ -424,7 +481,20 @@ export default {
       set: function (color) {
         if (this.backgroundColors.map((x) => x.value).includes(color)) {
           this.$settings.backgroundColor = color;
-          // this.$store.commit("setWebreaderBackground", color);
+        }
+      },
+    },
+
+    alwaysFullScreen: {
+      get: function () {
+        return this.$settings.alwaysFullScreen;
+      },
+      set: function (val) {
+        this.$settings.alwaysFullScreen = val;
+        if (screenfull.isEnabled) {
+          if (val != screenfull.isFullscreen) {
+            this.toggleFullScreen();
+          }
         }
       },
     },
@@ -436,7 +506,6 @@ export default {
       set: function (val) {
         if (this.readModes.map((x) => x.value).includes(val)) {
           this.$settings.readMode = val;
-          // this.$store.commit
         }
       },
     },

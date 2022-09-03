@@ -3,6 +3,7 @@ module github.com/chain710/manga
 go 1.17
 
 require (
+	github.com/bep/debounce v1.2.1
 	github.com/chain710/gounrar v0.0.0-20220901155652-7d3607080ea8
 	github.com/chain710/workqueue v0.1.0
 	github.com/disintegration/imageorient v0.0.0-20180920195336-8147d86e83ec

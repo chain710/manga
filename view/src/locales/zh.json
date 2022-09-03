@@ -58,7 +58,8 @@
       "background_color_black": "黑色",
       "reading_mode": "阅读模式",
       "read_mode_rtl": "从右到左",
-      "read_mode_ltr": "从左到右"
+      "read_mode_ltr": "从左到右",
+      "always_fullscreen": "总是全屏"
     }
   },
   "message": {
