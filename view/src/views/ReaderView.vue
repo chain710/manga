@@ -263,11 +263,9 @@ export default {
   async mounted() {
     await this.setup(this.volumeID, _.parseInt(this.$route.query.page));
     if (this.alwaysFullScreen) {
-      try {
-        this.enterFullScreen();
-      } catch (error) {
-        console.log(`enterfull screen error, maybe cause by refresh page`, error);
-      }
+      this.enterFullScreen().catch((err) => {
+        console.log(`enterfull screen error, maybe cause by refresh page`, err);
+      });
     }
   },
   destroyed() {
