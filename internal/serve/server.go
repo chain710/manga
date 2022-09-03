@@ -38,7 +38,8 @@ func startLibraryWatcher(ctx context.Context, cfg Config, database db.Interface,
 		libWatcher, err = tasks.NewLibraryWatcher(database, ts,
 			tasks.WithWatchInterval(cfg.WatchInterval),
 			tasks.WithScanWorker(cfg.ScanWorkerCount),
-			tasks.WithSerializerWorker(cfg.SerializeWorkerCount))
+			tasks.WithSerializerWorker(cfg.SerializeWorkerCount),
+			tasks.WithDebounceInterval(cfg.WatchDebounceInterval))
 		if err != nil {
 			log.Panicf("new library watcher error: %s", err)
 		}

@@ -32,6 +32,7 @@ const (
 	serializeWorkerCount    = "serialize_workers"
 	thumbRetryDelay         = "thumb_retry_delay"
 	thumbScannerWorkerCount = "thumb_scanner_workers"
+	watchDebounceInterval   = "watch_debounce_interval"
 )
 
 func (m *serveCmd) RunE(cmd *cobra.Command, _ []string) error {
@@ -52,6 +53,7 @@ func (m *serveCmd) RunE(cmd *cobra.Command, _ []string) error {
 		SerializeWorkerCount:    viper.GetInt(serializeWorkerCount),
 		ThumbRetryDelay:         viper.GetDuration(thumbRetryDelay),
 		ThumbScannerWorkerCount: viper.GetInt(thumbScannerWorkerCount),
+		WatchDebounceInterval:   viper.GetDuration(watchDebounceInterval),
 	}
 
 	if err := config.Validate(); err != nil {
@@ -99,5 +101,6 @@ func init() {
 	viperFlag(realCmd.Flags(), serializeWorkerCount, 1, "serialize worker count")
 	viperFlag(realCmd.Flags(), thumbRetryDelay, time.Second*30, "thumb retry delay")
 	viperFlag(realCmd.Flags(), thumbScannerWorkerCount, 1, "thumb scanner worker count")
+	viperFlag(realCmd.Flags(), watchDebounceInterval, time.Minute, "watch debounce interval, should >= 1s")
 	rootCmd.AddCommand(realCmd)
 }

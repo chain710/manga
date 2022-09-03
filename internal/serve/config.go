@@ -23,6 +23,7 @@ type Config struct {
 	SerializeWorkerCount    int
 	ThumbRetryDelay         time.Duration
 	ThumbScannerWorkerCount int
+	WatchDebounceInterval   time.Duration
 }
 
 func (c *Config) Validate() error {
@@ -63,6 +64,9 @@ func (c *Config) Validate() error {
 	}
 	if c.ThumbScannerWorkerCount <= 0 {
 		return errors.New("thumb scanner worker count should > 0")
+	}
+	if c.WatchDebounceInterval < time.Second {
+		return errors.New("watch debounce interval should >= 1s")
 	}
 	return nil
 }

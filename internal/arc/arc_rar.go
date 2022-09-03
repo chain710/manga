@@ -21,6 +21,9 @@ func newRARArchive(path string, skipReadingFiles bool) (*rarArchive, error) {
 			hdr, err := a.Next()
 			if err == io.EOF {
 				break
+			} else if err != nil {
+				log.Errorf("reading rar %s files error: %s", path, err)
+				return nil, err
 			}
 
 			if hdr.IsDir() {

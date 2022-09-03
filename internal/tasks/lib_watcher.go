@@ -41,6 +41,12 @@ func WithWatchInterval(duration time.Duration) LibraryWatcherOption {
 	}
 }
 
+func WithDebounceInterval(d time.Duration) LibraryWatcherOption {
+	return func(sd *LibraryWatcher) {
+		sd.debounceInterval = d
+	}
+}
+
 func NewLibraryWatcher(db db.Interface, thumbScanner *ThumbnailScanner, options ...LibraryWatcherOption) (*LibraryWatcher, error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -56,6 +62,7 @@ func NewLibraryWatcher(db db.Interface, thumbScanner *ThumbnailScanner, options 
 		scanWorkerCount:      1,
 		thumbScanner:         thumbScanner,
 		watcher:              watcher,
+		debounceInterval:     time.Minute,
 	}
 
 	for _, apply := range options {
@@ -79,6 +86,7 @@ type LibraryWatcher struct {
 	volumesCache         *cache.Volumes
 	thumbScanner         *ThumbnailScanner
 	watcher              *fsnotify.Watcher
+	debounceInterval     time.Duration
 }
 
 func (s *LibraryWatcher) Start(ctx context.Context) {
@@ -100,8 +108,8 @@ func (s *LibraryWatcher) Start(ctx context.Context) {
 		// first scan
 		log.Debugf("first scan on startup")
 		s.scan(ctx)
-		log.Debugf("first scan on startup finished")
-		deb := debounce.New(5 * time.Second)
+		log.Debugf("first scan on startup finished, create debounce: %s", s.debounceInterval.String())
+		deb := debounce.New(s.debounceInterval)
 
 		for {
 			shouldScan := false
@@ -177,7 +185,8 @@ func (s *LibraryWatcher) AddLibrary(library db.Library) error {
 
 // AddBook add book to scan queue
 func (s *LibraryWatcher) AddBook(book db.Book) error {
-	return s.scanQueue.Add(&bookItem{book})
+	options := []scanner.Option{scanner.IgnoreBookModTime(true)}
+	return s.scanQueue.Add(&bookItem{Book: book, options: options})
 }
 
 func (s *LibraryWatcher) Once(ctx context.Context, id int64) error {
@@ -219,7 +228,7 @@ func (s *LibraryWatcher) processQueue(ctx context.Context, worker int) {
 			case *libraryItem:
 				s.scanLibrary(ctx, &val.Library)
 			case *bookItem:
-				s.scanBook(&val.Book)
+				s.scanBook(&val.Book, val.options...)
 			default:
 				panic(fmt.Errorf("unknown item type: %+v", item))
 			}
@@ -235,8 +244,9 @@ func (s *LibraryWatcher) scanLibrary(ctx context.Context, lib *db.Library) {
 	}
 }
 
-func (s *LibraryWatcher) scanBook(book *db.Book) {
-	sc := scanner.New(s.serializeQueue, s.database, s.scanOptions...)
+func (s *LibraryWatcher) scanBook(book *db.Book, options ...scanner.Option) {
+	options = append(options, s.scanOptions...)
+	sc := scanner.New(s.serializeQueue, s.database, options...)
 	if err := sc.ScanBook(book); err != nil {
 		log.Errorf("scan book %d error: %s", book.ID, err)
 		return
@@ -316,7 +326,10 @@ func (s *libraryItem) Equal(i interface{}) bool {
 	return s.ID == other.ID && s.Path == other.Path
 }
 
-type bookItem struct{ db.Book }
+type bookItem struct {
+	db.Book
+	options []scanner.Option
+}
 type bookIndex int64
 
 func (s *bookItem) Index() interface{} {
