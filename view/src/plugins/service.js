@@ -1,4 +1,5 @@
 import axios from "axios";
+import _ from "lodash";
 
 function convertNumberOfRect(n) {
   return Math.floor(1000 * n)
@@ -69,6 +70,14 @@ export class Service {
     return this.http.post(`apis/v1/batch/volume/progress`, data);
   }
 
+  markVolumesUnread(vids) {
+    const data = { op: "Reset", volumes: _.map(vids, (vid) => ({ id: vid })) };
+    return this.http.post(`apis/v1/batch/volume/progress`, data);
+  }
+  markVolumesRead(vids) {
+    const data = { op: "Complete", volumes: _.map(vids, (vid) => ({ id: vid })) };
+    return this.http.post(`apis/v1/batch/volume/progress`, data);
+  }
   setVolumeThumb(vid, buffer) {
     return this.http.post(`apis/v1/volume/${vid}/thumb`, buffer);
   }

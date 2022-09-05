@@ -42,9 +42,11 @@ export default {
       };
 
       let rp = 0;
+      let unread = true;
       if (volume.progress) {
         rp = readPercent(volume.progress.page, volume.page_count);
-        readable["query"] = { page: volume.progress.page };
+        readable["query"] = { page: volume.progress.page == 0 ? 1 : volume.progress.page };
+        unread = false;
       }
 
       const result = {
@@ -54,7 +56,7 @@ export default {
         subTitle: { text: volume.book_name },
         bottomText: null,
         readPercent: rp,
-        unread: rp == 0,
+        unread: unread,
         readable,
       };
       if (volume.book_name) {

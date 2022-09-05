@@ -1,63 +1,63 @@
 <template>
-  <div>
-    <v-container fluid>
-      <v-pagination
-        v-if="books.length > 0"
-        v-model="desiredPage"
-        :length="pageCount"
-        @input="jumpPage"
-        total-visible="8"></v-pagination>
+  <v-container fluid>
+    <v-pagination
+      v-if="books.length > 0"
+      v-model="desiredPage"
+      :length="pageCount"
+      @input="jumpPage"
+      total-visible="8"></v-pagination>
+    <div ref="test1">
       <item-browser :width="150" v-if="books.length > 0" :items="items" wrap>
         <!-- <template v-slot:item-card="{item}"><book-card-menu :item="item"></book-card-menu></template> -->
       </item-browser>
-      <!--empty-->
-      <v-card elevation="0" class="mt-6" v-if="isSetup && books.length == 0">
-        <v-card-title class="d-flex justify-center align-center">
-          <h1>
-            <v-icon x-large color="warning">mdi-alert-decagram-outline</v-icon>
-            {{ $t("library.empty") }}
-          </h1>
-        </v-card-title>
-      </v-card>
-      <!--aux speed dial-->
-      <v-speed-dial
-        v-if="library != null"
-        v-model="fab"
-        bottom
-        right
-        absolute
-        fixed
-        direction="top"
-        transition="slide-y-reverse-transition">
-        <template v-slot:activator>
-          <v-btn v-model="fab" color="blue darken-2" dark fab>
-            <v-icon v-if="fab">mdi-close</v-icon>
-            <v-icon v-else>mdi-cog-outline</v-icon>
-          </v-btn>
-        </template>
-        <v-btn v-for="(item, i) in fabItems" fab dark small :color="item.color" @click="item.onClick" :key="i">
-          <v-tooltip left nudge-left="5" open-delay="500">
-            <template v-slot:activator="{ on, attrs }">
-              <v-icon v-bind="attrs" v-on="on">{{ item.icon }}</v-icon>
-            </template>
-            <span>{{ item.tip }}</span>
-          </v-tooltip>
+    </div>
+    <!--empty-->
+    <v-card elevation="0" class="mt-6" v-if="isSetup && books.length == 0">
+      <v-card-title class="d-flex justify-center align-center">
+        <h1>
+          <v-icon x-large color="warning">mdi-alert-decagram-outline</v-icon>
+          {{ $t("library.empty") }}
+        </h1>
+      </v-card-title>
+    </v-card>
+    <!--aux speed dial-->
+    <v-speed-dial
+      v-if="library != null"
+      v-model="fab"
+      bottom
+      right
+      absolute
+      fixed
+      direction="top"
+      transition="slide-y-reverse-transition">
+      <template v-slot:activator>
+        <v-btn v-model="fab" color="blue darken-2" dark fab>
+          <v-icon v-if="fab">mdi-close</v-icon>
+          <v-icon v-else>mdi-cog-outline</v-icon>
         </v-btn>
-      </v-speed-dial>
-      <!--confirm-->
-      <confirm-dialog
-        v-model="confirm.enabled"
-        :title="confirm.title"
-        :body="confirm.body"
-        type="error"
-        :confirm-func="confirm.do"></confirm-dialog>
-      <!--lib edit-->
-      <library-edit-dialog
-        v-model="showLibraryEdit"
-        :library="library"
-        @updated="$hub.syncLibraries"></library-edit-dialog>
-    </v-container>
-  </div>
+      </template>
+      <v-btn v-for="(item, i) in fabItems" fab dark small :color="item.color" @click="item.onClick" :key="i">
+        <v-tooltip left nudge-left="5" open-delay="500">
+          <template v-slot:activator="{ on, attrs }">
+            <v-icon v-bind="attrs" v-on="on">{{ item.icon }}</v-icon>
+          </template>
+          <span>{{ item.tip }}</span>
+        </v-tooltip>
+      </v-btn>
+    </v-speed-dial>
+    <!--confirm-->
+    <confirm-dialog
+      v-model="confirm.enabled"
+      :title="confirm.title"
+      :body="confirm.body"
+      type="error"
+      :confirm-func="confirm.do"></confirm-dialog>
+    <!--lib edit-->
+    <library-edit-dialog
+      v-model="showLibraryEdit"
+      :library="library"
+      @updated="$hub.syncLibraries"></library-edit-dialog>
+  </v-container>
 </template>
 <script>
 import _ from "lodash";
@@ -91,13 +91,25 @@ export default {
   },
   async mounted() {
     // update pagesize by window width; but dont dynamic adjust
-    const cardWidth = 150 + 16; // margin = 16
-    const cardPerRow = Math.floor(window.innerWidth / cardWidth);
-    this.pageSize = Math.max(cardPerRow, Math.floor(50 / cardPerRow) * cardPerRow);
+    this.pageSize = this.predictPageSize();
     await this.setup(this.libraryID, this.$route.query.page);
     this.isSetup = true;
   },
   methods: {
+    predictPageSize() {
+      const windowWidth = window.innerWidth;
+      const drawerWidth = 256;
+      const showDrawer = this.$vuetify.breakpoint.lgAndUp;
+      let innerWidth = windowWidth;
+      if (showDrawer) {
+        innerWidth = windowWidth - drawerWidth;
+      }
+
+      innerWidth = innerWidth - 12 * 2; // padding 12
+      const cardWidth = 150 + 16; // margin = 16
+      const cardPerRow = Math.floor(innerWidth / cardWidth);
+      return cardPerRow * 3;
+    },
     jumpPage(page) {
       if (page == this.dataPage) {
         return;

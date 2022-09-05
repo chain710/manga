@@ -5,7 +5,11 @@
         <div class="title">{{ $t("dashboard.recent_read") }}</div>
       </template>
       <template v-slot:content>
-        <item-browser :items="recentReadVolumeItems"></item-browser>
+        <item-browser :items="recentReadVolumeItems" configurable>
+          <template v-slot:item-config="{ item }">
+            <reading-menu :on-update="onReadingUpdate" :item="item"></reading-menu>
+          </template>
+        </item-browser>
       </template>
     </horizontal-scroller>
 
@@ -22,8 +26,10 @@
 <script>
 import HorizontalScroller from "@/components/HorizontalScroller.vue";
 import ItemBrowser from "@/components/ItemBrowser.vue";
+import ReadingMenu from "@/components/ReadingMenu.vue";
+
 export default {
-  components: { HorizontalScroller, ItemBrowser },
+  components: { HorizontalScroller, ItemBrowser, ReadingMenu },
   data: () => ({
     booksLimit: 20,
     latestUpdateBooks: [],
@@ -68,6 +74,10 @@ export default {
         console.log("list recent read books error", error);
         this.$nerror(`list_volume`, error);
       }
+    },
+
+    onReadingUpdate() {
+      this.syncRecentReadVolumes();
     },
   },
   computed: {

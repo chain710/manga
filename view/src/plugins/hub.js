@@ -26,7 +26,9 @@ export const useHub = defineStore("hub", {
         },
         (err) => {
           wrapper.done = true;
+          this.purgeTasks();
           console.log(`task error`, err);
+          throw err;
         }
       );
     },
