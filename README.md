@@ -42,5 +42,6 @@ docker run -d -v /host_books:/container_books -p 8080:8080 manga-depot:v0.0.1 se
 
 ### front end
 
+- [ ] mark volume read/unread
 - [ ] reader original mode
 - [ ] book meta edit

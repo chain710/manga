@@ -29,4 +29,4 @@ genmock:
 fe-dep:
 	cd view && npm install
 fe: fe-dep
-	cd view && npm run build -- --dest=../static/dist
+	cd view && npm run build
