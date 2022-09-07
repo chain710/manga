@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/chain710/manga/internal/log"
 	"github.com/chain710/manga/internal/migrations"
 	"github.com/golang-migrate/migrate/v4"
@@ -12,8 +15,6 @@ import (
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	_ "github.com/jackc/pgx/v4/stdlib"
 	"github.com/jmoiron/sqlx"
-	"strings"
-	"time"
 )
 
 type PostgresOptions struct {
@@ -190,7 +191,7 @@ func (p *Postgres) GetLibrary(ctx context.Context, id int64) (*Library, error) {
 
 func (p *Postgres) ListLibraries(ctx context.Context) ([]Library, error) {
 	var libs []Library
-	if err := p.DB.SelectContext(ctx, &libs, "select * from libraries"); err != nil {
+	if err := p.DB.SelectContext(ctx, &libs, "select * from libraries order by id"); err != nil {
 		return nil, err
 	}
 
@@ -615,7 +616,7 @@ func (p *Postgres) countBookQuery(opt ListBooksOptions) (string, []interface{}, 
 		q = "select count(books.id) as count from books left join book_thumbnail bt on books.id = bt.id"
 		where = append(where, "bt.id is null")
 	case ListBooksLeftJoinProgress:
-		q = `select count(books.id) as count from books left join(` + selectProgress + `) b on books.id=b.book_id`
+		q = `select count(id) as count from books`
 	case ListBooksRightJoinProgress:
 		q = `select count(books.id) as count from books right join(` + selectProgress + `) b on books.id=b.book_id`
 	}
@@ -680,6 +681,8 @@ func (p *Postgres) listBookQuery(opt ListBooksOptions) (string, []interface{}, e
 
 	if opt.Sort != "" {
 		sb.Order("order by " + opt.Sort)
+	} else {
+		sb.Order("order by books.id")
 	}
 
 	if opt.Limit > 0 {
