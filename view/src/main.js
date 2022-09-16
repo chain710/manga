@@ -12,6 +12,7 @@ import i18n from "./i18n";
 import { createPinia, PiniaVuePlugin } from "pinia";
 import persistedstate from "pinia-plugin-persistedstate";
 import VueRouter from "vue-router";
+import './registerServiceWorker'
 
 Vue.config.productionTip = false;
 Vue.use(PiniaVuePlugin);
