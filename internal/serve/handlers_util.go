@@ -71,6 +71,7 @@ func (h *handlers) getImage(vol *db.Volume, page int, options getImageOptions) (
 	}
 
 	if options.updateCache {
+		logger.Debugf("set vol page cache wh=(%d, %d)", img.W, img.H)
 		h.volumePageCache.Set(k, img)
 	}
 
@@ -111,11 +112,12 @@ func (h *handlers) cropAsFitThumb(vol *db.Volume, page int, rect image.Rectangle
 		return nil, err
 	}
 
+	logger.Debugf("crop rect (%d, %d), (%d, %d)", rect.Min.X, rect.Min.Y, rect.Max.X, rect.Max.Y)
 	x0 := int(float64(rect.Min.X) / 1000 * float64(pageImage.W))
 	y0 := int(float64(rect.Min.Y) / 1000 * float64(pageImage.H))
 	x1 := int(float64(rect.Max.X) / 1000 * float64(pageImage.W))
 	y1 := int(float64(rect.Max.Y) / 1000 * float64(pageImage.H))
-	logger.Debugf("ready to crop image (%d, %d),(%d, %d)", x0, y0, x1, y1)
+	logger.Debugf("ready to crop image (%d, %d),(%d, %d), image wh=(%d, %d)", x0, y0, x1, y1, pageImage.W, pageImage.H)
 	cropRect := image.Rect(x0, y0, x1, y1)
 	cropImage := imaging.Crop(img, cropRect)
 	thumb := imaging.Fit(cropImage, h.config.ThumbWidth, h.config.ThumbHeight, imaging.Lanczos)

@@ -91,11 +91,11 @@ func (i *ImagePrefetch) prefetch(item prefetchImageItem) {
 			Data:   data,
 			Hash:   util.ImageHash(data),
 			Format: format,
-			H:      cfg.Width,
-			W:      cfg.Height,
+			W:      cfg.Width,
+			H:      cfg.Height,
 		}
 		i.imageCache.Set(k, img)
-		log.Debugf("prefetch vol %s/%d, size=%d", k.Volume, k.Page, len(data))
+		log.Debugf("prefetch vol %s/%d, size=%d, wh=(%d, %d)", k.Volume, k.Page, len(data), cfg.Width, cfg.Height)
 	}
 
 }
