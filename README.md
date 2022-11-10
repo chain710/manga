@@ -20,7 +20,7 @@ copy most front end code from komga, with improvement in reader and better archi
 
 ```bash
 # build docker image
-docker build --no-cache --progress=plain -t manga-depot:latest .
+docker build --no-cache --progress=plain -t chain710/manga-depot:latest .
 ```
 
 ## run

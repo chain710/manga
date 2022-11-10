@@ -31,11 +31,15 @@ module.exports = defineConfig({
 
   pwa: {
     name: "MangaDepot",
-    assetsVersion: "1.1",
+    assetsVersion: "1.2",
     themeColor: "#ffffff",
     msTileColor: "#da532c",
     appleMobileWebAppCapable: "yes",
     appleMobileWebAppStatusBarStyle: "black",
+    manifestCrossorigin: "use-credentials",
+    workboxOptions: {
+      exclude: ["index.html"],
+    },
     manifestOptions: {
       icons: [
         {
