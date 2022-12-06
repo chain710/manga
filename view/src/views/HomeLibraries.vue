@@ -6,7 +6,7 @@
       :length="pageCount"
       @input="jumpPage"
       total-visible="8"></v-pagination>
-    <div ref="test1">
+    <div>
       <item-browser :width="150" v-if="books.length > 0" :items="items" wrap>
         <!-- <template v-slot:item-card="{item}"><book-card-menu :item="item"></book-card-menu></template> -->
       </item-browser>
@@ -152,13 +152,14 @@ export default {
     editLibrary() {
       this.showLibraryEdit = true;
     },
-    async scanLibrary() {
+    async scanLibrary(evt) {
+      const full = evt.shiftKey;
       try {
-        let resp = await this.$service.scanLibrary(this.libraryID);
-        console.log("scan library resp", resp);
+        let resp = await this.$service.scanLibrary(this.libraryID, full);
+        console.log(`scan(full: ${full}) library:`, resp);
         this.$ninfo("scan_library");
       } catch (error) {
-        console.log("scan library error: ", error);
+        console.log(`scan(full: ${full}) library error: ${error}`);
         this.$nerror("scan_library", error);
       }
     },

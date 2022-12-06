@@ -57,12 +57,6 @@ const routes = [
     component: () => import("../views/ReaderView.vue"),
     props: true,
   },
-  // {
-  //   path: "/play",
-  //   name: "play",
-  //   component: () => import("../views/MyPlay.vue"),
-  //   props: true,
-  // },
 ];
 
 const router = new VueRouter({

@@ -24,6 +24,8 @@ type Config struct {
 	ThumbRetryDelay         time.Duration
 	ThumbScannerWorkerCount int
 	WatchDebounceInterval   time.Duration
+	MaxDatabaseConn         int
+	FullTextSearchTokenizer string
 }
 
 func (c *Config) Validate() error {

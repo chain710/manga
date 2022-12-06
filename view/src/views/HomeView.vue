@@ -17,6 +17,44 @@
         </v-chip>
       </v-toolbar-title>
       <v-spacer></v-spacer>
+      <v-combobox
+        v-model="searchBook"
+        :items="items"
+        :loading="isLoading"
+        :search-input.sync="search"
+        color="white"
+        hide-no-data
+        hide-selected
+        clearable
+        placeholder="Start typing to Search"
+        prepend-icon="mdi-magnify"
+        :hide-details="true"
+        :append-icon="null"
+        return-object
+        class="search-input"
+        :class="{ closed: !searchExpanded }"
+        ref="search"
+        no-filter
+        @click:prepend="expandSearchInput"
+        @blur="closeSearchInput"
+        @compositionend="onSearchInput(true)"
+        @compositionstart="searchTyping = true"
+        @update:search-input="onSearchInput(false)"
+        @keydown.esc="cancelSearch"
+        @input="jumpToBook">
+        <template v-slot:prepend>
+          <v-btn small icon @click="expandSearchInput"><v-icon>mdi-magnify</v-icon></v-btn>
+        </template>
+        <template v-slot:item="{ item }">
+          <v-list-item-avatar tile>
+            <v-img :src="$service.bookThumbURL(item.value.id)"></v-img>
+          </v-list-item-avatar>
+          <v-list-item-content>
+            <v-list-item-title v-text="item.value.name"></v-list-item-title>
+            <v-list-item-subtitle v-text="item.value.writer"></v-list-item-subtitle>
+          </v-list-item-content>
+        </template>
+      </v-combobox>
       <v-progress-circular v-if="$hub.tasks.length > 0" class="mr-2" indeterminate :width="2">
         <v-btn icon>
           <v-icon>mdi-triangle-wave</v-icon>
@@ -93,6 +131,7 @@
 <script>
 import FileBrowserDialog from "@/components/FileBrowserDialog.vue";
 import LibraryEditDialog from "@/components/LibraryEditDialog.vue";
+import _ from "lodash";
 
 export default {
   components: { FileBrowserDialog, LibraryEditDialog },
@@ -103,6 +142,16 @@ export default {
       barTitle: null,
       showFileBrowser: false,
       showLibraryEdit: false,
+      oldSearch: null,
+      search: null,
+      searchTyping: false,
+      searchExpanded: false,
+      showSearchResult: true,
+      searchShrinkWhenSearchComplete: false,
+      searchBook: null,
+
+      isLoading: false,
+      items: [],
     };
   },
 
@@ -141,6 +190,95 @@ export default {
           throw `unknown main-enter ${options.name}`;
       }
     },
+    expandSearchInput: function () {
+      this.searchExpanded = true;
+      this.$refs.search.focus();
+    },
+    closeSearchInput: function () {
+      if (this.search) {
+        return;
+      }
+      this.searchExpanded = false;
+      this.$refs.search.blur(); // without this, click outside browser cause bug
+    },
+    cancelSearch: function () {
+      console.log(`cancel search`);
+      if (this.isLoading) {
+        this.searchShrinkWhenSearchComplete = true;
+      } else {
+        this.resetSearch(true);
+      }
+    },
+    jumpToBook: function () {
+      const i = this.items.indexOf(this.searchBook); // value must be item of search results
+      if (i < 0 || !this.searchBook) {
+        return;
+      }
+
+      this.$router.push({ name: "book", params: { bookID: this.searchBook.value.id } });
+      this.resetSearch(true);
+    },
+    onSearchInput: _.debounce(async function (stopped) {
+      if (stopped && this.searchTyping) {
+        this.searchTyping = false;
+      }
+      if (!this.searchTyping) {
+        if (!this.search || !this.search.trim()) {
+          this.resetSearch(false);
+          return;
+        }
+        const s = this.search.trim();
+        if (s == this.oldSearch) {
+          return;
+        }
+        try {
+          this.isLoading = true;
+          console.log(`invoke search: ${s}`);
+          const result = await this.$service.listBooks({ sort: "latest", query: s, limit: 10 });
+          const books = result.data.data.books;
+          let items = [];
+          for (let book of books) {
+            items.push({
+              text: `${book.name} - ${book.writer}`,
+              value: book,
+            });
+          }
+
+          console.log(`search = ${s}, return count=${books.length} items count=${items.length}`);
+          this.items = items;
+          this.oldSearch = s;
+        } catch (error) {
+          this.$nerror("search_book", error);
+          console.error(`search book error: ${error}`);
+        } finally {
+          this.isLoading = false;
+          if (this.searchShrinkWhenSearchComplete) {
+            this.searchShrinkWhenSearchComplete = false;
+            this.resetSearch(true);
+          }
+        }
+      }
+    }, 200),
+
+    resetSearch: function (close) {
+      this.searchBook = null;
+      this.oldSearch = null;
+      this.search = null;
+      this.items = [];
+      if (close) {
+        this.$nextTick(function () {
+          this.$refs.search.reset();
+          this.$refs.search.blur();
+        });
+      }
+    },
   },
 };
 </script>
+<style lang="sass">
+.search-input
+  transition: max-width 0.3s
+  max-width: 450px
+  &.closed
+    max-width:32px
+</style>

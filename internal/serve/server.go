@@ -65,7 +65,10 @@ func Start(ctx context.Context, cfg Config) {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	database, err := db.NewPostgres(cfg.DSN, db.DefaultPostgresOptions())
+	pgOptions := db.DefaultPostgresOptions()
+	pgOptions.MaxOpenConns = cfg.MaxDatabaseConn
+	pgOptions.Tokenizer = cfg.FullTextSearchTokenizer
+	database, err := db.NewPostgres(cfg.DSN, pgOptions)
 	if err != nil {
 		log.Errorf("init database error: %s", err)
 		return

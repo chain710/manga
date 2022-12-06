@@ -10,7 +10,7 @@
   "library": {
     "fab": {
       "edit": "修改库",
-      "scan": "扫描库文件",
+      "scan": "扫描库文件(按住shift全面扫描)",
       "delete": "删除库"
     },
     "all": "所有库",
@@ -67,6 +67,7 @@
       "set_thumb": "设置封面错误: {err}",
       "list_library": "获取库错误: {err}",
       "list_book": "获取书籍错误：{err}",
+      "search_book": "搜索书籍错误：{err}",
       "list_directory": "获取服务器目录错误：{err}",
       "add_library": "添加库失败：{err}",
       "patch_library": "修改库失败：{err}",
