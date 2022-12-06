@@ -378,6 +378,29 @@ func (_m *Interface) PatchLibrary(ctx context.Context, opt db.PatchLibraryOption
 	return r0, r1
 }
 
+// SearchBooks provides a mock function with given fields: ctx, opt
+func (_m *Interface) SearchBooks(ctx context.Context, opt db.SearchBooksOptions) ([]db.Book, error) {
+	ret := _m.Called(ctx, opt)
+
+	var r0 []db.Book
+	if rf, ok := ret.Get(0).(func(context.Context, db.SearchBooksOptions) []db.Book); ok {
+		r0 = rf(ctx, opt)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]db.Book)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, db.SearchBooksOptions) error); ok {
+		r1 = rf(ctx, opt)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // SetBookThumbnail provides a mock function with given fields: ctx, thumbnail
 func (_m *Interface) SetBookThumbnail(ctx context.Context, thumbnail db.BookThumbnail) error {
 	ret := _m.Called(ctx, thumbnail)

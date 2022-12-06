@@ -19,6 +19,7 @@ type Interface interface {
 	PatchBook(ctx context.Context, opt PatchBookOptions) (*Book, error)
 	DeleteBook(ctx context.Context, options DeleteBookOptions) error
 	ListBooks(ctx context.Context, opt ListBooksOptions) ([]Book, int, error)
+	SearchBooks(ctx context.Context, opt SearchBooksOptions) ([]Book, error)
 	GetVolume(ctx context.Context, opt GetVolumeOptions) (*Volume, error)
 	ListVolumes(ctx context.Context, opt ListVolumesOptions) ([]Volume, error)
 	GetVolumeNeighbour(ctx context.Context, opt GetVolumeNeighbourOptions) (*int64, *int64, error)
@@ -130,4 +131,8 @@ type GetVolumeThumbOptions struct {
 
 type DeleteBookOptions struct {
 	ID int64
+}
+
+type SearchBooksOptions struct {
+	Query string
 }

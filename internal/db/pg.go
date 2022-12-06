@@ -788,3 +788,7 @@ from volumes left join volume_thumbnail vc on volumes.id = vc.id left join books
 	}
 	return sb.ToSQL(), args
 }
+
+func (p *Postgres) SearchBooks(ctx context.Context, opt SearchBooksOptions) ([]Book, error) {
+	return nil, nil
+}
