@@ -18,8 +18,8 @@ type Interface interface {
 	UpdateBook(ctx context.Context, b *Book) error
 	PatchBook(ctx context.Context, opt PatchBookOptions) (*Book, error)
 	DeleteBook(ctx context.Context, options DeleteBookOptions) error
+	// ListBooks return current page books, total count and error if any
 	ListBooks(ctx context.Context, opt ListBooksOptions) ([]Book, int, error)
-	SearchBooks(ctx context.Context, opt SearchBooksOptions) ([]Book, error)
 	GetVolume(ctx context.Context, opt GetVolumeOptions) (*Volume, error)
 	ListVolumes(ctx context.Context, opt ListVolumesOptions) ([]Volume, error)
 	GetVolumeNeighbour(ctx context.Context, opt GetVolumeNeighbourOptions) (*int64, *int64, error)
@@ -63,6 +63,7 @@ type ListBooksOptions struct {
 	Limit     int
 	Sort      string
 	Join      string
+	Query     string // query name,writer field
 }
 
 type GetVolumeOptions struct {
@@ -131,8 +132,4 @@ type GetVolumeThumbOptions struct {
 
 type DeleteBookOptions struct {
 	ID int64
-}
-
-type SearchBooksOptions struct {
-	Query string
 }

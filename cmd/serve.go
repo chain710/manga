@@ -33,6 +33,8 @@ const (
 	thumbRetryDelay         = "thumb_retry_delay"
 	thumbScannerWorkerCount = "thumb_scanner_workers"
 	watchDebounceInterval   = "watch_debounce_interval"
+	maxDatabaseConn         = "max_db_conn"
+	fullTextSearchTokenizer = "fts_tokenizer"
 )
 
 func (m *serveCmd) RunE(cmd *cobra.Command, _ []string) error {
@@ -54,6 +56,8 @@ func (m *serveCmd) RunE(cmd *cobra.Command, _ []string) error {
 		ThumbRetryDelay:         viper.GetDuration(thumbRetryDelay),
 		ThumbScannerWorkerCount: viper.GetInt(thumbScannerWorkerCount),
 		WatchDebounceInterval:   viper.GetDuration(watchDebounceInterval),
+		MaxDatabaseConn:         viper.GetInt(maxDatabaseConn),
+		FullTextSearchTokenizer: viper.GetString(fullTextSearchTokenizer),
 	}
 
 	if err := config.Validate(); err != nil {
@@ -102,5 +106,7 @@ func init() {
 	viperFlag(realCmd.Flags(), thumbRetryDelay, time.Second*30, "thumb retry delay")
 	viperFlag(realCmd.Flags(), thumbScannerWorkerCount, 1, "thumb scanner worker count")
 	viperFlag(realCmd.Flags(), watchDebounceInterval, time.Minute, "watch debounce interval, should >= 1s")
+	viperFlag(realCmd.Flags(), maxDatabaseConn, 100, "max database connection count")
+	viperFlag(realCmd.Flags(), fullTextSearchTokenizer, "default", "full text search tokenizer")
 	rootCmd.AddCommand(realCmd)
 }

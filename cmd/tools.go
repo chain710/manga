@@ -21,12 +21,14 @@ type toolsCmd struct {
 }
 
 func (t *toolsCmd) initCmd(_ *cobra.Command, _ []string) error {
-	dsn := viper.GetString("dsn")
-	if dsn == "" {
+	dsnValue := viper.GetString(dsn)
+	if dsnValue == "" {
 		return errors.New("dsn required")
 	}
 
-	database, err := db.NewPostgres(dsn, db.DefaultPostgresOptions())
+	options := db.DefaultPostgresOptions()
+	options.Tokenizer = viper.GetString(fullTextSearchTokenizer)
+	database, err := db.NewPostgres(dsnValue, options)
 	if err != nil {
 		return err
 	}
@@ -96,6 +98,22 @@ func (t *toolsCmd) setVolumeThumbnail(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func (t *toolsCmd) searchBooks(cmd *cobra.Command, args []string) error {
+	query := args[0]
+	books, _, err := t.db.ListBooks(cmd.Context(), db.ListBooksOptions{Query: query, Join: db.ListBooksOnly})
+	if err != nil {
+		log.Errorf("search books error: %s", err)
+		return err
+	}
+
+	cmd.Printf("got %d results\n", len(books))
+	for _, book := range books {
+		cmd.Printf("%d %s (by %s) %s\n",
+			book.ID, book.Name, book.Writer, book.Path)
+	}
+	return nil
+}
+
 func init() {
 	var cmd toolsCmd
 	addLib := &cobra.Command{
@@ -123,11 +141,18 @@ func init() {
 		RunE:    cmd.scanThumbnail,
 	}
 	scanThumb.Flags().BoolVar(&cmd.forceUpdateThumb, "force", false, "force update all thumbs")
+	searchBooks := &cobra.Command{
+		Use:     "searchbooks",
+		PreRunE: cmd.initCmd,
+		RunE:    cmd.searchBooks,
+		Args:    cobra.ExactArgs(1),
+	}
 	realCmd := &cobra.Command{
 		Use:   "tools",
 		Short: "tools collection",
 	}
-	realCmd.AddCommand(addLib, scanLib, setVolThumb, scanThumb)
-	viperFlag(realCmd.PersistentFlags(), "dsn", "", "data source name, like postgres://localhost:5432/db?sslmode=disable")
+	realCmd.AddCommand(addLib, scanLib, setVolThumb, scanThumb, searchBooks)
+	viperFlag(realCmd.PersistentFlags(), dsn, "", "data source name, like postgres://localhost:5432/db?sslmode=disable")
+	viperFlag(realCmd.PersistentFlags(), fullTextSearchTokenizer, "simple", "full text search tokenizer")
 	rootCmd.AddCommand(realCmd)
 }

@@ -20,6 +20,8 @@ func viperFlag(set *pflag.FlagSet, name string, value interface{}, usage string)
 		set.StringP(name, "", v, usage)
 	case time.Duration:
 		set.DurationP(name, "", v, usage)
+	default:
+		panic(fmt.Sprintf("not support value type: %v", value))
 	}
 
 	// delay viper.BindPFlag to RunE, to avoid same name entry conflict

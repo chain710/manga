@@ -20,6 +20,7 @@ import (
 type PostgresOptions struct {
 	MaxOpenConns    int
 	ConnMaxLifetime time.Duration
+	Tokenizer       string
 }
 
 func DefaultPostgresOptions() PostgresOptions {
@@ -38,11 +39,12 @@ func NewPostgres(dataSourceName string, opt PostgresOptions) (*Postgres, error) 
 	db.SetMaxOpenConns(opt.MaxOpenConns)
 	db.SetConnMaxLifetime(opt.ConnMaxLifetime)
 	log.Debugf("success open pgx")
-	return &Postgres{DB: *db}, nil
+	return &Postgres{DB: *db, tokenizer: opt.Tokenizer}, nil
 }
 
 type Postgres struct {
 	sqlx.DB
+	tokenizer string
 }
 
 var _ Interface = &Postgres{}
@@ -255,6 +257,7 @@ func (p *Postgres) ListBooks(ctx context.Context, opt ListBooksOptions) ([]Book,
 		return nil, 0, err
 	}
 	query = p.DB.Rebind(query)
+	log.Debugf("list books query: %s; args: %v", query, args)
 	if err := p.DB.SelectContext(ctx, &books, query, args...); err != nil {
 		log.Errorf("select books error: %s; query %s", err, query)
 		return nil, 0, err
@@ -644,14 +647,14 @@ func (p *Postgres) listBookQuery(opt ListBooksOptions) (string, []interface{}, e
 	const selectProgress = `select page_count, volume, title, a.* from volumes right join (
     select distinct on (book_id) book_id, page, volume_id, update_at, create_at from volume_progress order by book_id, update_at desc
     ) a on volumes.id=a.volume_id `
-	sb := newSQLBuilder(logicOpAnd)
-
+	sb := newSQLBuilder()
+	// select id,name,path from books,to_tsquery('jiebaqry', '浦泽直树') query where to_tsvector('jiebaqry', name) @@ query or to_tsvector('jiebaqry', writer) @@ query;
 	switch opt.Join {
 	case ListBooksOnly:
 		sb.Statement("select * from books")
 	case ListBookWithoutThumbnail:
 		sb.Statement("select books.* from books left join book_thumbnail bt on books.id = bt.id")
-		sb.Filter("bt.id is null")
+		sb.WhereRaw(logicOpAnd, "bt.id is null")
 	case ListBooksLeftJoinProgress:
 		sb.Statement(`select books.*,
        b.page_count as read_volume_page_count,
@@ -661,7 +664,7 @@ func (p *Postgres) listBookQuery(opt ListBooksOptions) (string, []interface{}, e
        b.title as read_volume_title,
        b.create_at as read_volume_begin_at,
        b.update_at as read_volume_at
-       from books`).Statement(`left join (` + selectProgress + `) b on books.id=b.book_id`)
+       from books`).Statementf("left join (%s) b on books.id=b.book_id", selectProgress)
 	case ListBooksRightJoinProgress:
 		sb.Statement(`select books.*,
        b.page_count as read_volume_page_count,
@@ -671,12 +674,21 @@ func (p *Postgres) listBookQuery(opt ListBooksOptions) (string, []interface{}, e
        b.title as read_volume_title,
        b.create_at as read_volume_begin_at,
        b.update_at as read_volume_at
-       from books`).Statement(`right join(` + selectProgress + `) b on books.id=b.book_id`)
+       from books`).Statementf("right join(%s) b on books.id=b.book_id", selectProgress)
 	}
 	args := make(map[string]interface{})
 	if opt.LibraryID != nil {
-		sb.Filter("library_id = :lib")
+		sb.WhereRaw(logicOpAnd, "library_id = :lib")
 		args["lib"] = *opt.LibraryID
+	}
+
+	if opt.Query != "" {
+		tsExpr := newWhereExpression(logicOpOr)
+		tsExpr.AddChild(newTextSearchWhereExpression(p.tokenizer, ":query", "name")).
+			AddChild(newTextSearchWhereExpression(p.tokenizer, ":query", "writer"))
+		sb.Where(logicOpAnd, tsExpr)
+		args["query"] = opt.Query
+		// args["query"] = opt.Query
 	}
 
 	if opt.Sort != "" {
@@ -725,7 +737,7 @@ where volumes.id=$1`
 
 func (p *Postgres) listVolumeQuery(opt ListVolumesOptions) (string, []interface{}) {
 	var args []interface{}
-	sb := newSQLBuilder(logicOpAnd)
+	sb := newSQLBuilder()
 	switch opt.Join {
 	case VolumeCompactProgress: // with progress
 		sb.Statement(`select volumes.id, 
@@ -739,7 +751,7 @@ func (p *Postgres) listVolumeQuery(opt ListVolumesOptions) (string, []interface{
        volumes.page_count as read_volume_page_count
 from volumes left join volume_progress vp on volumes.id = vp.volume_id`)
 		if opt.BookID != nil {
-			sb.Filter(`volumes.book_id=$1`)
+			sb.WhereRaw(logicOpAnd, `volumes.book_id=$1`)
 			sb.Order(`order by volume, id`)
 			args = append(args, *opt.BookID)
 		}
@@ -756,7 +768,7 @@ from volumes left join volume_progress vp on volumes.id = vp.volume_id`)
        volumes.page_count as read_volume_page_count
 from volumes left join books b on volumes.book_id = b.id inner join volume_progress vp on volumes.id = vp.volume_id and vp.complete = false`)
 		if opt.BookID != nil {
-			sb.Filter(`volumes.book_id=$1`)
+			sb.WhereRaw(logicOpAnd, `volumes.book_id=$1`)
 			args = append(args, *opt.BookID)
 		}
 
@@ -765,18 +777,18 @@ from volumes left join books b on volumes.book_id = b.id inner join volume_progr
 		sb.Statement(`select volumes.id, 
        volumes.book_id, volumes.create_at, volumes.path, volumes.title, volumes.volume, volumes.page_count, volumes.files
 from volumes left join volume_thumbnail vc on volumes.id = vc.id left join books on books.id = volumes.book_id`)
-		sb.Filter("vc.id is null")
+		sb.WhereRaw(logicOpAnd, "vc.id is null")
 		if opt.BookID != nil {
-			sb.Filter("volumes.book_id=$1")
+			sb.WhereRaw(logicOpAnd, "volumes.book_id=$1")
 			args = append(args, *opt.BookID)
 		} else if opt.LibraryID != nil {
-			sb.Filter("books.library_id=$1")
+			sb.WhereRaw(logicOpAnd, "books.library_id=$1")
 			args = append(args, *opt.LibraryID)
 		}
 	case "":
 		sb.Statement(`select * from volumes`)
 		if opt.BookID != nil {
-			sb.Filter(`book_id=$1`)
+			sb.WhereRaw(logicOpAnd, `book_id=$1`)
 			args = append(args, *opt.BookID)
 		}
 	default:
@@ -787,8 +799,4 @@ from volumes left join volume_thumbnail vc on volumes.id = vc.id left join books
 		sb.Order(fmt.Sprintf("limit %d", opt.Limit))
 	}
 	return sb.ToSQL(), args
-}
-
-func (p *Postgres) SearchBooks(ctx context.Context, opt SearchBooksOptions) ([]Book, error) {
-	return nil, nil
 }
