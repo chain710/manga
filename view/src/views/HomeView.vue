@@ -17,6 +17,21 @@
         </v-chip>
       </v-toolbar-title>
       <v-spacer></v-spacer>
+      <v-text-field
+        v-model.trim="search"
+        prepend-inner-icon="mdi-magnify"
+        dense
+        filled
+        single-line
+        hide-details="true"
+        class="search-input"
+        clearable
+        :class="{ closed: !searchExpanded && !search }"
+        @focus="searchExpanded = true"
+        @blur="searchExpanded = false"
+        @compositionend="onSearchInput(true)"
+        @compositionstart="searchTyping = true"
+        @input="onSearchInput(false)"></v-text-field>
       <v-progress-circular v-if="$hub.tasks.length > 0" class="mr-2" indeterminate :width="2">
         <v-btn icon>
           <v-icon>mdi-triangle-wave</v-icon>
@@ -93,6 +108,7 @@
 <script>
 import FileBrowserDialog from "@/components/FileBrowserDialog.vue";
 import LibraryEditDialog from "@/components/LibraryEditDialog.vue";
+import _ from "lodash";
 
 export default {
   components: { FileBrowserDialog, LibraryEditDialog },
@@ -103,6 +119,9 @@ export default {
       barTitle: null,
       showFileBrowser: false,
       showLibraryEdit: false,
+      search: "",
+      searchTyping: false,
+      searchExpanded: false,
     };
   },
 
@@ -141,6 +160,38 @@ export default {
           throw `unknown main-enter ${options.name}`;
       }
     },
+    onSearchInput: _.debounce(async function (end) {
+      if (end && this.searchTyping) {
+        this.searchTyping = false;
+      }
+      if (!this.searchTyping) {
+        try {
+          const result = await this.$service.listBooks({ sort: "latest", query: this.search, limit: 10 });
+          const books = result.data.data.books;
+          console.log(`search = ${this.search}, return count=${books.length}`);
+          for (let book of books) {
+            console.log(`book`, book);
+          }
+        } catch (error) {
+          this.$nerror("search_book", error);
+          console.error(`search book error: ${error}`);
+        }
+      }
+    }, 400),
   },
 };
 </script>
+
+<style lang="sass">
+.v-input.search-input
+  transition: max-width 0.3s
+  max-width: 450px
+  .v-input__slot
+    &:before, &:after
+      border-style: none !important
+  &.closed
+    max-width:45px
+    .v-input__slot
+      cursor: pointer
+      background: transparent !important
+</style>
