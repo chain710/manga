@@ -217,6 +217,7 @@ func (h *handlers) apiListBooks(ctx *gin.Context) (interface{}, error) {
 		Offset    int    `form:"offset"`
 		Limit     int    `form:"limit"`
 		Sort      string `form:"sort"`
+		Query     string `form:"query"`
 	}
 	if err := ctx.ShouldBindQuery(&queryParam); err != nil {
 		log.Debugf("bind query error: %s", err)
@@ -233,6 +234,7 @@ func (h *handlers) apiListBooks(ctx *gin.Context) (interface{}, error) {
 		LibraryID: queryParam.LibraryID,
 		Offset:    queryParam.Offset,
 		Limit:     queryParam.Limit,
+		Query:     queryParam.Query,
 	}
 	if sort, ok := sortBooks[queryParam.Sort]; ok {
 		options.Sort = sort
@@ -240,6 +242,8 @@ func (h *handlers) apiListBooks(ctx *gin.Context) (interface{}, error) {
 	if join, ok := filterBooks[queryParam.Filter]; ok {
 		options.Join = join
 	}
+
+	options.Query = parseTextSearchQuery(queryParam.Query)
 
 	books, count, err := h.database.ListBooks(ctx, options)
 	if err != nil {

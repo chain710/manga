@@ -153,3 +153,18 @@ func bestFit(x, y, fitX, fitY int) (int, int) {
 		return rx, ry
 	}
 }
+
+func parseTextSearchQuery(a string) string {
+	if a == "" {
+		return ""
+	}
+	strArray := strings.Split(a, " ")
+	newStrArray := make([]string, 0)
+	for _, str := range strArray {
+		str = strings.TrimSpace(str)
+		if len(str) > 0 {
+			newStrArray = append(newStrArray, str)
+		}
+	}
+	return strings.Join(newStrArray, "|")
+}
