@@ -6,7 +6,7 @@
       :length="pageCount"
       @input="jumpPage"
       total-visible="8"></v-pagination>
-    <div ref="test1">
+    <div>
       <item-browser :width="150" v-if="books.length > 0" :items="items" wrap>
         <!-- <template v-slot:item-card="{item}"><book-card-menu :item="item"></book-card-menu></template> -->
       </item-browser>

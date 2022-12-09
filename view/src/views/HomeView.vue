@@ -17,21 +17,32 @@
         </v-chip>
       </v-toolbar-title>
       <v-spacer></v-spacer>
-      <v-text-field
-        v-model.trim="search"
-        prepend-inner-icon="mdi-magnify"
-        dense
-        filled
-        single-line
-        hide-details="true"
-        class="search-input"
+      <v-combobox
+        :items="items"
+        :loading="isLoading"
+        :search-input.sync="search"
+        color="white"
+        hide-no-data
+        hide-selected
         clearable
-        :class="{ closed: !searchExpanded && !search }"
-        @focus="searchExpanded = true"
-        @blur="searchExpanded = false"
+        placeholder="Start typing to Search"
+        prepend-icon="mdi-magnify"
+        :hide-details="true"
+        :append-icon="null"
+        return-object
+        class="search-input"
+        :class="{ closed: !searchExpanded }"
+        ref="search"
+        no-filter
+        @click:prepend="expandSearchInput"
+        @blur="closeSearchInput"
         @compositionend="onSearchInput(true)"
         @compositionstart="searchTyping = true"
-        @input="onSearchInput(false)"></v-text-field>
+        @update:search-input="onSearchInput(false)">
+        <template v-slot:prepend>
+          <v-btn small icon @click="expandSearchInput"><v-icon>mdi-magnify</v-icon></v-btn>
+        </template>
+      </v-combobox>
       <v-progress-circular v-if="$hub.tasks.length > 0" class="mr-2" indeterminate :width="2">
         <v-btn icon>
           <v-icon>mdi-triangle-wave</v-icon>
@@ -119,9 +130,14 @@ export default {
       barTitle: null,
       showFileBrowser: false,
       showLibraryEdit: false,
-      search: "",
+      oldSearch: null,
+      search: null,
       searchTyping: false,
       searchExpanded: false,
+      showSearchResult: true,
+
+      isLoading: false,
+      items: [],
     };
   },
 
@@ -160,38 +176,59 @@ export default {
           throw `unknown main-enter ${options.name}`;
       }
     },
-    onSearchInput: _.debounce(async function (end) {
-      if (end && this.searchTyping) {
+    expandSearchInput: function () {
+      this.searchExpanded = true;
+      this.$refs.search.focus();
+    },
+    closeSearchInput: function () {
+      if (this.search) {
+        return;
+      }
+      this.searchExpanded = false;
+    },
+    onSearchInput: _.debounce(async function (stopped) {
+      if (stopped && this.searchTyping) {
         this.searchTyping = false;
       }
       if (!this.searchTyping) {
+        if (!this.search || !this.search.trim()) {
+          return;
+        }
+        const s = this.search.trim();
+        if (s == this.oldSearch) {
+          return;
+        }
         try {
-          const result = await this.$service.listBooks({ sort: "latest", query: this.search, limit: 10 });
+          this.isLoading = true;
+          console.log(`invoke search: ${s}`);
+          const result = await this.$service.listBooks({ sort: "latest", query: s, limit: 10 });
           const books = result.data.data.books;
-          console.log(`search = ${this.search}, return count=${books.length}`);
+          let items = [];
           for (let book of books) {
-            console.log(`book`, book);
+            items.push({
+              text: `${book.name} - ${book.writer}`,
+              value: book.id,
+            });
           }
+
+          console.log(`search = ${s}, return count=${books.length} items count=${items.length}`);
+          this.items = items;
+          this.oldSearch = s;
         } catch (error) {
           this.$nerror("search_book", error);
           console.error(`search book error: ${error}`);
+        } finally {
+          this.isLoading = false;
         }
       }
-    }, 400),
+    }, 200),
   },
 };
 </script>
-
 <style lang="sass">
-.v-input.search-input
+.search-input
   transition: max-width 0.3s
   max-width: 450px
-  .v-input__slot
-    &:before, &:after
-      border-style: none !important
   &.closed
-    max-width:45px
-    .v-input__slot
-      cursor: pointer
-      background: transparent !important
+    max-width:32px
 </style>
