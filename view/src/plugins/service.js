@@ -45,8 +45,8 @@ export class Service {
     return this.http.delete(`apis/v1/library/${id}`);
   }
 
-  scanLibrary(id) {
-    return this.http.get(`apis/v1/library/${id}/scan`);
+  scanLibrary(id, full) {
+    return this.http.get(`apis/v1/library/${id}/scan`, { params: { full: full } });
   }
 
   listBooks(option) {

@@ -152,13 +152,14 @@ export default {
     editLibrary() {
       this.showLibraryEdit = true;
     },
-    async scanLibrary() {
+    async scanLibrary(evt) {
+      const full = evt.shiftKey;
       try {
-        let resp = await this.$service.scanLibrary(this.libraryID);
-        console.log("scan library resp", resp);
+        let resp = await this.$service.scanLibrary(this.libraryID, full);
+        console.log(`scan(full: ${full}) library:`, resp);
         this.$ninfo("scan_library");
       } catch (error) {
-        console.log("scan library error: ", error);
+        console.log(`scan(full: ${full}) library error: ${error}`);
         this.$nerror("scan_library", error);
       }
     },

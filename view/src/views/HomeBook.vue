@@ -142,6 +142,13 @@ export default {
       return "";
     },
   },
+  async beforeRouteUpdate(to, from, next) {
+    if (to.params.bookID != from.params.bookID) {
+      // TODO: maybe this.$hub.addTask?
+      await this.syncBook(to.params.bookID);
+    }
+    next();
+  },
 };
 </script>
 <style scoped></style>

@@ -10,7 +10,7 @@
   "library": {
     "fab": {
       "edit": "修改库",
-      "scan": "扫描库文件",
+      "scan": "扫描库文件(按住shift全面扫描)",
       "delete": "删除库"
     },
     "all": "所有库",

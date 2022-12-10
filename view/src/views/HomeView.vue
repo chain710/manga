@@ -18,6 +18,7 @@
       </v-toolbar-title>
       <v-spacer></v-spacer>
       <v-combobox
+        v-model="searchBook"
         :items="items"
         :loading="isLoading"
         :search-input.sync="search"
@@ -38,9 +39,20 @@
         @blur="closeSearchInput"
         @compositionend="onSearchInput(true)"
         @compositionstart="searchTyping = true"
-        @update:search-input="onSearchInput(false)">
+        @update:search-input="onSearchInput(false)"
+        @keydown.esc="cancelSearch"
+        @input="jumpToBook">
         <template v-slot:prepend>
           <v-btn small icon @click="expandSearchInput"><v-icon>mdi-magnify</v-icon></v-btn>
+        </template>
+        <template v-slot:item="{ item }">
+          <v-list-item-avatar tile>
+            <v-img :src="$service.bookThumbURL(item.value.id)"></v-img>
+          </v-list-item-avatar>
+          <v-list-item-content>
+            <v-list-item-title v-text="item.value.name"></v-list-item-title>
+            <v-list-item-subtitle v-text="item.value.writer"></v-list-item-subtitle>
+          </v-list-item-content>
         </template>
       </v-combobox>
       <v-progress-circular v-if="$hub.tasks.length > 0" class="mr-2" indeterminate :width="2">
@@ -135,6 +147,8 @@ export default {
       searchTyping: false,
       searchExpanded: false,
       showSearchResult: true,
+      searchShrinkWhenSearchComplete: false,
+      searchBook: null,
 
       isLoading: false,
       items: [],
@@ -185,6 +199,24 @@ export default {
         return;
       }
       this.searchExpanded = false;
+      this.$refs.search.blur(); // without this, click outside browser cause bug
+    },
+    cancelSearch: function () {
+      console.log(`cancel search`);
+      if (this.isLoading) {
+        this.searchShrinkWhenSearchComplete = true;
+      } else {
+        this.resetSearch(true);
+      }
+    },
+    jumpToBook: function () {
+      const i = this.items.indexOf(this.searchBook); // value must be item of search results
+      if (i < 0 || !this.searchBook) {
+        return;
+      }
+
+      this.$router.push({ name: "book", params: { bookID: this.searchBook.value.id } });
+      this.resetSearch(true);
     },
     onSearchInput: _.debounce(async function (stopped) {
       if (stopped && this.searchTyping) {
@@ -192,6 +224,7 @@ export default {
       }
       if (!this.searchTyping) {
         if (!this.search || !this.search.trim()) {
+          this.resetSearch(false);
           return;
         }
         const s = this.search.trim();
@@ -207,7 +240,7 @@ export default {
           for (let book of books) {
             items.push({
               text: `${book.name} - ${book.writer}`,
-              value: book.id,
+              value: book,
             });
           }
 
@@ -219,9 +252,26 @@ export default {
           console.error(`search book error: ${error}`);
         } finally {
           this.isLoading = false;
+          if (this.searchShrinkWhenSearchComplete) {
+            this.searchShrinkWhenSearchComplete = false;
+            this.resetSearch(true);
+          }
         }
       }
     }, 200),
+
+    resetSearch: function (close) {
+      this.searchBook = null;
+      this.oldSearch = null;
+      this.search = null;
+      this.items = [];
+      if (close) {
+        this.$nextTick(function () {
+          this.$refs.search.reset();
+          this.$refs.search.blur();
+        });
+      }
+    },
   },
 };
 </script>
