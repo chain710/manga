@@ -28,6 +28,9 @@ docker build --no-cache --progress=plain -t chain710/manga-depot:latest .
 ```bash
 # setup database
 docker run -it --rm manga-depot:v0.0.1 migrate up --dsn 'postgres://manga:123456@localhost:5432/manga?sslmode=disable'
+# create extension if necessary
+# in postgres with superuser
+create extension pg_jieba
 # run service
 docker run -d -v /host_books:/container_books -p 8080:8080 manga-depot:v0.0.1 serve --dsn 'postgres://manga:123456@localhost:5432/manga?sslmode=disable'
 ```
