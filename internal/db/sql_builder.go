@@ -50,7 +50,7 @@ func newRawWhereExpression(s string) *whereExpression {
 
 // newTextSearchWhereExpression: query should be placeholder, or string wrap with ' like 'query'
 func newTextSearchWhereExpression(tokenizer, query, colName string) *whereExpression {
-	s := fmt.Sprintf("to_tsvector('%s', %s) @@ to_tsquery('%s', %s)",
+	s := fmt.Sprintf("to_tsvector('%s', %s) @@ websearch_to_tsquery('%s', %s)",
 		tokenizer, colName,
 		tokenizer, query)
 	return &whereExpression{statement: s}

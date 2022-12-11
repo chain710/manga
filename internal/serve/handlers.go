@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"errors"
+	"github.com/chain710/manga/internal/scanner"
 
 	"github.com/chain710/manga/internal/arc"
 	"github.com/chain710/manga/internal/cache"
@@ -40,7 +41,6 @@ type handlers struct {
 	config          Config
 	database        db.Interface
 	archiveCache    *arc.ArchiveCache
-	volumesCache    *cache.Volumes
 	volumePageCache *cache.Images
 	thumbCache      *cache.Images
 	imagePrefetch   *tasks.ImagePrefetch
@@ -177,6 +177,15 @@ func (h *handlers) apiScanLibrary(ctx *gin.Context) (interface{}, error) {
 		return nil, err
 	}
 
+	var queryParams struct {
+		Full bool `form:"full"` // full scan
+	}
+
+	if err := ctx.ShouldBindQuery(&queryParams); err != nil {
+		log.Debugf("bind query error: %s", err)
+		return nil, err
+	}
+
 	lib, err := h.database.GetLibrary(ctx, uriParams.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -189,7 +198,11 @@ func (h *handlers) apiScanLibrary(ctx *gin.Context) (interface{}, error) {
 
 	if nil != h.libWatcher {
 		log.Infof("add scan book %d task", uriParams.ID)
-		_ = h.libWatcher.AddLibrary(*lib)
+		var options []scanner.Option
+		if queryParams.Full {
+			options = append(options, scanner.IgnoreBookModTime(true))
+		}
+		_ = h.libWatcher.AddLibrary(*lib, options...)
 	}
 
 	if nil != h.thumbScanner {
@@ -243,7 +256,7 @@ func (h *handlers) apiListBooks(ctx *gin.Context) (interface{}, error) {
 		options.Join = join
 	}
 
-	options.Query = parseTextSearchQuery(queryParam.Query)
+	options.Query = sanitizeTextSearchQuery(queryParam.Query)
 
 	books, count, err := h.database.ListBooks(ctx, options)
 	if err != nil {

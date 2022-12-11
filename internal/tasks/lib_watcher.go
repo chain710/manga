@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/bep/debounce"
-	"github.com/chain710/manga/internal/cache"
 	"github.com/chain710/manga/internal/db"
 	"github.com/chain710/manga/internal/log"
 	"github.com/chain710/manga/internal/scanner"
@@ -83,7 +82,6 @@ type LibraryWatcher struct {
 	serializeWorkerCount int // serialize worker count
 	scanWorkerCount      int
 	scanOptions          []scanner.Option
-	volumesCache         *cache.Volumes
 	thumbScanner         *ThumbnailScanner
 	watcher              *fsnotify.Watcher
 	debounceInterval     time.Duration
@@ -173,14 +171,14 @@ func (s *LibraryWatcher) watchAllLibraries(ctx context.Context) error {
 }
 
 // AddLibrary add library to scan queue
-func (s *LibraryWatcher) AddLibrary(library db.Library) error {
+func (s *LibraryWatcher) AddLibrary(library db.Library, options ...scanner.Option) error {
 	if err := s.watcher.Add(library.Path); err != nil {
 		log.Errorf("add lib path %s to fsnotify watcher error: %s", library.Path, err)
 		return err
 	}
 
 	log.Infof("add library %s to watcher", library.Path)
-	return s.scanQueue.Add(&libraryItem{library})
+	return s.scanQueue.Add(&libraryItem{Library: library, options: options})
 }
 
 // AddBook add book to scan queue
@@ -226,7 +224,7 @@ func (s *LibraryWatcher) processQueue(ctx context.Context, worker int) {
 			defer s.scanQueue.Done(item, nil)
 			switch val := item.(type) {
 			case *libraryItem:
-				s.scanLibrary(ctx, &val.Library)
+				s.scanLibrary(ctx, &val.Library, val.options...)
 			case *bookItem:
 				s.scanBook(&val.Book, val.options...)
 			default:
@@ -236,8 +234,9 @@ func (s *LibraryWatcher) processQueue(ctx context.Context, worker int) {
 	}
 }
 
-func (s *LibraryWatcher) scanLibrary(ctx context.Context, lib *db.Library) {
-	sc := scanner.New(s.serializeQueue, s.database, s.scanOptions...)
+func (s *LibraryWatcher) scanLibrary(ctx context.Context, lib *db.Library, options ...scanner.Option) {
+	options = append(options, s.scanOptions...)
+	sc := scanner.New(s.serializeQueue, s.database, options...)
 	if err := sc.ScanLibrary(ctx, lib); err != nil {
 		log.Errorf("scan lib %d error: %s", lib.ID, err)
 		return
@@ -289,25 +288,14 @@ func (s *LibraryWatcher) serialize(ctx context.Context, worker int) {
 			if nil != s.thumbScanner {
 				s.thumbScanner.Scan()
 			}
-			// evict all volume cache
-			s.evictVolumeCache(&b.Book)
 		}()
 	}
 }
 
-func (s *LibraryWatcher) evictVolumeCache(b *db.Book) {
-	if s.volumesCache == nil {
-		return
-	}
-	for _, vol := range b.Volumes {
-		s.volumesCache.Remove(vol.ID)
-	}
-	for _, vol := range b.Extras {
-		s.volumesCache.Remove(vol.ID)
-	}
+type libraryItem struct {
+	db.Library
+	options []scanner.Option
 }
-
-type libraryItem struct{ db.Library }
 type libraryIndex int64
 
 func (s *libraryItem) Index() interface{} {

@@ -98,3 +98,23 @@ func Test_bestFit(t *testing.T) {
 		})
 	}
 }
+
+func Test_sanitizeTextSearchQuery(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		expect string
+	}{
+		{
+			name:   "name",
+			input:  "q&a  adachi",
+			expect: "q or a or adachi",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := sanitizeTextSearchQuery(tt.input)
+			require.Equal(t, tt.expect, actual)
+		})
+	}
+}

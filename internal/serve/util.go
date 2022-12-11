@@ -154,11 +154,15 @@ func bestFit(x, y, fitX, fitY int) (int, int) {
 	}
 }
 
-func parseTextSearchQuery(a string) string {
+func sanitizeTextSearchQuery(a string) string {
 	if a == "" {
 		return ""
 	}
-	strArray := strings.Split(a, " ")
+
+	r := strings.NewReplacer("&", " ")
+	b := r.Replace(a)
+
+	strArray := strings.Split(b, " ")
 	newStrArray := make([]string, 0)
 	for _, str := range strArray {
 		str = strings.TrimSpace(str)
@@ -166,5 +170,6 @@ func parseTextSearchQuery(a string) string {
 			newStrArray = append(newStrArray, str)
 		}
 	}
-	return strings.Join(newStrArray, "|")
+
+	return strings.Join(newStrArray, " or ")
 }

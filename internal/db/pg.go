@@ -648,7 +648,6 @@ func (p *Postgres) listBookQuery(opt ListBooksOptions) (string, []interface{}, e
     select distinct on (book_id) book_id, page, volume_id, update_at, create_at from volume_progress order by book_id, update_at desc
     ) a on volumes.id=a.volume_id `
 	sb := newSQLBuilder()
-	// select id,name,path from books,to_tsquery('jiebaqry', '浦泽直树') query where to_tsvector('jiebaqry', name) @@ query or to_tsvector('jiebaqry', writer) @@ query;
 	switch opt.Join {
 	case ListBooksOnly:
 		sb.Statement("select * from books")
